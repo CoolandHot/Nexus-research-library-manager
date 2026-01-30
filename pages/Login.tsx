@@ -175,6 +175,34 @@ const Login: React.FC<LoginProps> = ({ onAuthSuccess }) => {
               </p>
             </div>
           </div>
+
+          <div>
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Recommended Workflow</h3>
+            <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4 text-left space-y-3">
+              <p className="text-sm font-bold text-purple-900">
+                📝 Enhance your research with these complementary tools
+              </p>
+              <div className="space-y-3 text-xs text-purple-700">
+                <div>
+                  <strong className="block mb-1">For Web & PDF Annotation:</strong>
+                  <p className="leading-relaxed">
+                    Use <a href="https://hypothes.is" target="_blank" rel="noopener noreferrer" className="underline hover:text-purple-900 font-bold">Hypothesis</a> to
+                    annotate PDFs and web pages directly in your browser. Your annotations sync across devices and can be referenced in Nexus.
+                  </p>
+                </div>
+                <div>
+                  <strong className="block mb-1">For PDF Storage:</strong>
+                  <p className="leading-relaxed">
+                    Store annotated PDFs in <strong>Google Drive</strong> or <strong>Dropbox</strong>, then link them in Nexus using shareable links.
+                    This keeps your files accessible anywhere while maintaining your research metadata here.
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-purple-600 italic pt-2 border-t border-purple-200">
+                💡 Nexus manages metadata & organization. Use external tools for annotation & storage.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

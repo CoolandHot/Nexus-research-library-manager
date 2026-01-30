@@ -195,10 +195,9 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
       }
 
       const papers = (linkData.papers || []).map((p: any) => {
-        const { userLabel, ...rest } = p;
+        const { id, userLabel, ...rest } = p; // Remove id completely
         return {
           ...rest,
-          id: undefined, // Remove ID so new ones are generated
           folder_id: selectedFolder || null,
           user_label: userLabel || p.user_label // Support both naming conventions
         };
