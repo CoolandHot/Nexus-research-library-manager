@@ -2,6 +2,8 @@
 
 A completely online alternative for Zotero built with React, TypeScript, and Supabase, featuring a unique dual-database architecture for enhanced privacy and flexibility.
 
+Online demo (ready to use): https://nexus-research-library-manager.pages.dev/
+
 ## Overview
 
 > [!IMPORTANT]
