@@ -24,7 +24,7 @@ graph TD
     style UserDB fill:#4ade80,stroke:#22c55e,stroke-width:2px,color:#fff
 ```
 
-Nexus Research is a powerful web application for researchers to organize, annotate, and share their academic paper collections. It serves as a **completely online alternative for Zotero**, primarily designed to track open journal URLs and link to PDF documents stored on your personal drive (via shared file links). It uses two separate Supabase databases: one for global user authentication (with public share links) and another for personal library storage, giving users complete control over their research data.
+Nexus Research is a powerful web application for researchers to organize, annotate, and share their academic paper collections. It serves as a **completely online alternative for Zotero**, primarily designed to track open journal URLs and link to PDF documents stored on your personal drive (via shared file links). It uses two separate Supabase databases: one for global user authentication (with public user-created share links on selected papers) and another for personal library storage, giving users complete control over their research data.
 
 ![Nexus Research Interface](screenshots/Nexus%20research%20screen.gif)
 
