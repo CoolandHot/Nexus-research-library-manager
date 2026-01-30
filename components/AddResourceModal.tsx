@@ -194,11 +194,15 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
         return;
       }
 
-      const papers = (linkData.papers || []).map((p: any) => ({
-        ...p,
-        id: undefined, // Remove ID so new ones are generated
-        folder_id: selectedFolder || null
-      }));
+      const papers = (linkData.papers || []).map((p: any) => {
+        const { userLabel, ...rest } = p;
+        return {
+          ...rest,
+          id: undefined, // Remove ID so new ones are generated
+          folder_id: selectedFolder || null,
+          user_label: userLabel || p.user_label // Support both naming conventions
+        };
+      });
 
       if (papers.length > 0) {
         await onAdd(papers);

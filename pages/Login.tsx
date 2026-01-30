@@ -29,7 +29,7 @@ const Login: React.FC<LoginProps> = ({ onAuthSuccess }) => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (lockoutTime > 0) return;
-    
+
     setLoading(true);
     setError(null);
 
@@ -55,15 +55,15 @@ const Login: React.FC<LoginProps> = ({ onAuthSuccess }) => {
       onAuthSuccess(data as Profile);
       navigate('/');
     }
-    
+
     setLoading(false);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="max-w-md w-full bg-white rounded-[3rem] shadow-2xl p-10 border border-slate-100 relative overflow-hidden">
+      <div className="max-w-xl w-full bg-white rounded-[3rem] shadow-2xl p-10 border border-slate-100 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-        
+
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl text-white font-black text-2xl mb-4 shadow-xl shadow-blue-200 italic relative">
             N
@@ -87,14 +87,14 @@ const Login: React.FC<LoginProps> = ({ onAuthSuccess }) => {
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Identity</label>
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-              <input 
+              <input
                 required
                 disabled={lockoutTime > 0}
                 type="text"
                 className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:border-blue-500 outline-none font-bold text-sm text-slate-700 transition-all disabled:opacity-50"
                 placeholder="username"
                 value={formData.username}
-                onChange={e => setFormData({...formData, username: e.target.value})}
+                onChange={e => setFormData({ ...formData, username: e.target.value })}
               />
             </div>
           </div>
@@ -103,20 +103,20 @@ const Login: React.FC<LoginProps> = ({ onAuthSuccess }) => {
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Pass-phrase</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-              <input 
+              <input
                 required
                 disabled={lockoutTime > 0}
                 type="password"
                 className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:border-blue-500 outline-none font-bold text-sm text-slate-700 transition-all disabled:opacity-50"
                 placeholder="••••••••"
                 value={formData.password}
-                onChange={e => setFormData({...formData, password: e.target.value})}
+                onChange={e => setFormData({ ...formData, password: e.target.value })}
               />
             </div>
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading || lockoutTime > 0}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-200 transition-all flex items-center justify-center space-x-3 text-sm uppercase tracking-widest disabled:bg-slate-300 disabled:shadow-none"
           >
@@ -144,6 +144,37 @@ const Login: React.FC<LoginProps> = ({ onAuthSuccess }) => {
             <span>Initialize Account</span>
             <ArrowRight size={16} />
           </Link>
+        </div>
+
+        {/* App Description & Setup Instructions */}
+        <div className="mt-10 pt-8 border-t border-slate-100 space-y-6">
+          <div>
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">About Nexus</h3>
+            <p className="text-slate-600 text-sm leading-relaxed">
+              A <strong>self-hosted research library manager</strong> that uses your own Supabase database for complete privacy and control.
+              Organize papers, annotate with markdown, and share collections securely.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Setup Required</h3>
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-left space-y-3">
+              <p className="text-sm font-bold text-blue-900">
+                🔐 You need a personal Supabase database to use Nexus
+              </p>
+              <ol className="text-xs text-blue-700 space-y-2 list-decimal list-inside">
+                <li><strong>Create account</strong> at <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-900">supabase.com</a></li>
+                <li><strong>Create a new project</strong> (choose a region closest to you)</li>
+                <li><strong>Run the SQL schema</strong> from the README to set up tables</li>
+                <li><strong>Get your credentials</strong> (Project URL & anon key) from Settings → API</li>
+                <li><strong>Sign up</strong> in Nexus with your desired username & password</li>
+                <li><strong>Configure</strong> your Supabase credentials in the setup page</li>
+              </ol>
+              <p className="text-xs text-blue-600 italic pt-2 border-t border-blue-200">
+                💡 Your data stays in YOUR database. Nexus never stores your credentials or papers.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
