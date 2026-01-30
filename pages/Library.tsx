@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { authSupabase, getLibraryClient } from '../lib/supabase';
 import { Folder, Paper, TreeItem, Profile } from '../types';
 import TreeNode from '../components/TreeNode';
@@ -442,6 +443,7 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
       <div className={className}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeRaw]}
           components={{
             p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
             strong: ({ node, ...props }) => <strong className="font-bold" {...props} />,

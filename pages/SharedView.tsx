@@ -6,6 +6,7 @@ import { Paper, ShareLink } from '../types';
 import { BookOpen, Calendar, Hash, FileText, AlertTriangle, Eye, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 const SharedView: React.FC = () => {
     const { shareId } = useParams<{ shareId: string }>();
@@ -70,6 +71,7 @@ const SharedView: React.FC = () => {
         return (
             <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
                 components={{
                     p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
                     strong: ({ node, ...props }) => <strong className="font-bold" {...props} />,
