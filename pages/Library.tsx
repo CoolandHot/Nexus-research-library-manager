@@ -4,7 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Plus, Settings as SettingsIcon, Database, FileText, User,
   ChevronDown, Edit3, Trash2, Globe, Star, Tag, AlertTriangle,
-  BookOpen, Calendar, Hash, X as CloseIcon, Info, LogOut, Download, CheckSquare, Square, Share2, FolderPlus, Folder as FolderIcon, Move, Menu, PanelLeftClose, PanelLeftOpen, Link as LinkIcon, FileDown
+  BookOpen, Calendar, Hash, X as CloseIcon, Info, LogOut, Download, CheckSquare, Square, Share2, FolderPlus, Folder as FolderIcon, Move, Menu, PanelLeftClose, PanelLeftOpen, Link as LinkIcon, FileDown,
+  ArrowUp, ArrowDown
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -43,6 +44,17 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
   const [isCreatingShareLink, setIsCreatingShareLink] = useState(false);
   const [shareLinkTitle, setShareLinkTitle] = useState('');
   const [shareLinkDescription, setShareLinkDescription] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Paper; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (key: keyof Paper) => {
+    setSortConfig(prev => {
+      if (prev?.key === key) {
+        if (prev.direction === 'asc') return { key, direction: 'desc' };
+        return null;
+      }
+      return { key, direction: 'asc' };
+    });
+  };
 
   // Dialog states
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -273,18 +285,41 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
 
   const activePapers = useMemo(() => {
     if (!libraryData) return [];
-    const filtered = activeFolderId
+    let papers = activeFolderId
       ? libraryData.papers.filter(p => p.folder_id === activeFolderId)
       : libraryData.papers;
 
-    if (!searchQuery) return filtered;
-    const q = searchQuery.toLowerCase();
-    return filtered.filter(p =>
-      p.title.toLowerCase().includes(q) ||
-      p.authors?.toLowerCase().includes(q) ||
-      (p.userLabel || '').toLowerCase().includes(q)
-    );
-  }, [activeFolderId, libraryData, searchQuery]);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      papers = papers.filter(p =>
+        p.title.toLowerCase().includes(q) ||
+        p.authors?.toLowerCase().includes(q) ||
+        (p.userLabel || '').toLowerCase().includes(q)
+      );
+    }
+
+    if (sortConfig) {
+      papers = [...papers].sort((a, b) => {
+        let aVal: any = a[sortConfig.key];
+        let bVal: any = b[sortConfig.key];
+
+        if (aVal === bVal) return 0;
+        if (aVal === null || aVal === undefined || aVal === '') return 1;
+        if (bVal === null || bVal === undefined || bVal === '') return -1;
+
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return papers;
+  }, [activeFolderId, libraryData, searchQuery, sortConfig]);
 
   const toggleSelection = (id: string) => {
     setSelectedPaperIds(prev => {
@@ -439,6 +474,11 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const SortIndicator = ({ column }: { column: keyof Paper }) => {
+    if (sortConfig?.key !== column) return null;
+    return sortConfig.direction === 'asc' ? <ArrowUp size={10} className="ml-1 inline" /> : <ArrowDown size={10} className="ml-1 inline" />;
   };
 
   const MarkdownRenderer: React.FC<{ content: string | undefined, className?: string }> = ({ content, className = '' }) => {
@@ -653,39 +693,62 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                   <div onMouseDown={(e) => startResizing('selection', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" />
                 </th>
                 <th
-                  className="px-10 py-5 sticky left-0 bg-white z-40 shadow-sm relative group"
+                  className="px-10 py-5 sticky left-0 bg-white z-40 shadow-sm relative group cursor-pointer hover:bg-slate-50 transition-colors"
                   style={{ width: columnWidths.identity, left: columnWidths.selection }}
+                  onClick={() => handleSort('title')}
                 >
-                  <span>Paper & Identity</span>
-                  <div onMouseDown={(e) => startResizing('identity', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" />
+                  <div className="flex items-center">
+                    <span>Paper & Identity</span>
+                    <SortIndicator column="title" />
+                  </div>
+                  <div onMouseDown={(e) => startResizing('identity', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" onClick={(e) => e.stopPropagation()} />
                 </th>
-                <th className="px-6 py-5 relative group" style={{ width: columnWidths.classification }}>
-                  <span>Classification</span>
-                  <div onMouseDown={(e) => startResizing('classification', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" />
+                <th className="px-6 py-5 relative group cursor-pointer hover:bg-slate-50 transition-colors" style={{ width: columnWidths.classification }} onClick={() => handleSort('userLabel')}>
+                  <div className="flex items-center">
+                    <span>Classification</span>
+                    <SortIndicator column="userLabel" />
+                  </div>
+                  <div onMouseDown={(e) => startResizing('classification', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" onClick={(e) => e.stopPropagation()} />
                 </th>
-                <th className="px-6 py-5 relative group" style={{ width: columnWidths.abstract }}>
-                  <span>Abstract</span>
-                  <div onMouseDown={(e) => startResizing('abstract', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" />
+                <th className="px-6 py-5 relative group cursor-pointer hover:bg-slate-50 transition-colors" style={{ width: columnWidths.abstract }} onClick={() => handleSort('abstract')}>
+                  <div className="flex items-center">
+                    <span>Abstract</span>
+                    <SortIndicator column="abstract" />
+                  </div>
+                  <div onMouseDown={(e) => startResizing('abstract', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" onClick={(e) => e.stopPropagation()} />
                 </th>
-                <th className="px-6 py-5 relative group" style={{ width: columnWidths.summary }}>
-                  <span>Summary</span>
-                  <div onMouseDown={(e) => startResizing('summary', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" />
+                <th className="px-6 py-5 relative group cursor-pointer hover:bg-slate-50 transition-colors" style={{ width: columnWidths.summary }} onClick={() => handleSort('summary')}>
+                  <div className="flex items-center">
+                    <span>Summary</span>
+                    <SortIndicator column="summary" />
+                  </div>
+                  <div onMouseDown={(e) => startResizing('summary', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" onClick={(e) => e.stopPropagation()} />
                 </th>
-                <th className="px-6 py-5 relative group" style={{ width: columnWidths.evaluation }}>
-                  <span>Critical Evaluation</span>
-                  <div onMouseDown={(e) => startResizing('evaluation', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" />
+                <th className="px-6 py-5 relative group cursor-pointer hover:bg-slate-50 transition-colors" style={{ width: columnWidths.evaluation }} onClick={() => handleSort('critical_evaluation')}>
+                  <div className="flex items-center">
+                    <span>Critical Evaluation</span>
+                    <SortIndicator column="critical_evaluation" />
+                  </div>
+                  <div onMouseDown={(e) => startResizing('evaluation', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" onClick={(e) => e.stopPropagation()} />
                 </th>
-                <th className="px-6 py-5 relative group" style={{ width: columnWidths.remarks }}>
-                  <span>Remarks</span>
-                  <div onMouseDown={(e) => startResizing('remarks', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" />
+                <th className="px-6 py-5 relative group cursor-pointer hover:bg-slate-50 transition-colors" style={{ width: columnWidths.remarks }} onClick={() => handleSort('remarks')}>
+                  <div className="flex items-center">
+                    <span>Remarks</span>
+                    <SortIndicator column="remarks" />
+                  </div>
+                  <div onMouseDown={(e) => startResizing('remarks', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" onClick={(e) => e.stopPropagation()} />
                 </th>
                 <th
-                  className="px-6 py-5 relative group"
+                  className="px-6 py-5 relative group cursor-pointer hover:bg-slate-50 transition-colors"
                   style={{ width: `${columnWidths.snippet}px` }}
+                  onClick={() => handleSort('useful_snippet')}
                 >
                   <div className="flex items-center justify-between">
-                    <span>Useful Snippet</span>
-                    <div onMouseDown={(e) => startResizing('snippet', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="flex items-center">
+                      <span>Useful Snippet</span>
+                      <SortIndicator column="useful_snippet" />
+                    </div>
+                    <div onMouseDown={(e) => startResizing('snippet', e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}></div>
                   </div>
                 </th>
                 <th
