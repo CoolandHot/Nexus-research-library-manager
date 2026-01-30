@@ -841,6 +841,7 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
         onClose={() => setIsModalOpen(false)}
         folders={libraryData?.folders || []}
         papers={libraryData?.papers || []}
+        initialFolderId={activeFolderId}
         onAdd={async (papers) => {
           const client = getLibraryClient();
           if (!client) return;

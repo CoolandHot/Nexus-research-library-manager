@@ -12,13 +12,21 @@ interface AddResourceModalProps {
   papers?: any[]; // Existing papers for duplicate detection
   onAdd: (papers: any[]) => Promise<void>;
   initialMode?: 'manual' | 'bibtex' | 'bulk' | 'csv' | 'share';
+  initialFolderId?: string | null;
 }
 
-const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, folders, papers = [], onAdd, initialMode = 'manual' }) => {
+const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, folders, papers = [], onAdd, initialMode = 'manual', initialFolderId = null }) => {
   const [mode, setMode] = useState<'manual' | 'bibtex' | 'bulk' | 'csv' | 'share'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
-  const [selectedFolder, setSelectedFolder] = useState<string>('');
+  const [selectedFolder, setSelectedFolder] = useState<string>(initialFolderId || '');
+
+  // Update selected folder when initialFolderId changes or modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setSelectedFolder(initialFolderId || '');
+    }
+  }, [isOpen, initialFolderId]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [manualPaper, setManualPaper] = useState({
@@ -44,6 +52,7 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
     isOpen: false,
     existingPaper: null
   });
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
 
   if (!isOpen) return null;
 
@@ -115,22 +124,60 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
   };
 
   const handleBulkImport = async () => {
-    const urls = bulkInput.split('\n').filter(u => u.trim().startsWith('http'));
-    if (urls.length === 0) return;
+    const lines = bulkInput.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0) return;
+
     setLoading(true);
+    setBulkProgress({ current: 0, total: lines.length });
+
+    const results: any[] = [];
+
     try {
-      const papers = urls.map(url => ({
-        url: url.trim(),
-        title: url.split('/').pop()?.split('?')[0] || 'Untitled Resource',
-        type: (url.toLowerCase().endsWith('.pdf') ? 'pdf' : 'web') as PaperType,
-        folder_id: selectedFolder || null
-      }));
-      await onAdd(papers);
-      onClose();
-    } catch (e) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        setBulkProgress({ current: i + 1, total: lines.length });
+
+        // Check if it's a DOI or doi.org URL
+        const isDoi = line.includes('doi.org/') || line.startsWith('10.') || /10.\d{4,9}\/[-._;()/:A-Z0-9]+/i.test(line);
+
+        let paperData: any = null;
+        if (isDoi) {
+          paperData = await fetchCrossRefMetadata(line);
+        }
+
+        if (paperData) {
+          results.push({
+            ...paperData,
+            folder_id: selectedFolder || null
+          });
+        } else if (line.startsWith('http')) {
+          // Fallback to simple URL logic if not a DOI or CrossRef fetch failed
+          results.push({
+            url: line,
+            title: line.split('/').pop()?.split('?')[0] || 'Untitled Resource',
+            type: (line.toLowerCase().endsWith('.pdf') ? 'pdf' : 'web') as PaperType,
+            folder_id: selectedFolder || null
+          });
+        }
+
+        // Wait at least 1 second before next request (if not the last line)
+        if (i < lines.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (results.length > 0) {
+        await onAdd(results);
+        onClose();
+      } else {
+        alert("No papers could be imported.");
+      }
+    } catch (e: any) {
       console.error("Bulk import failed", e);
+      alert("Bulk import failed: " + e.message);
     } finally {
       setLoading(false);
+      setBulkProgress(null);
     }
   };
 
@@ -333,8 +380,37 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
 
           {mode === 'bulk' && (
             <div className="space-y-6">
-              <textarea placeholder="Paste links (one per line)..." className="w-full h-80 p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl" value={bulkInput} onChange={e => setBulkInput(e.target.value)} />
-              <button onClick={handleBulkImport} disabled={loading} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-xl shadow-blue-100">Bulk Import</button>
+              <textarea
+                placeholder="Paste links or DOIs (one per line)..."
+                className="w-full h-80 p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl resize-none"
+                value={bulkInput}
+                onChange={e => setBulkInput(e.target.value)}
+                disabled={loading}
+              />
+
+              {bulkProgress && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                    <span>Fetching Metadata...</span>
+                    <span>{bulkProgress.current} / {bulkProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-full transition-all duration-500"
+                      style={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handleBulkImport}
+                disabled={loading || !bulkInput.trim()}
+                className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-xl shadow-blue-100 flex items-center justify-center space-x-2 disabled:bg-slate-300 disabled:shadow-none transition-all"
+              >
+                {loading ? <Loader2 className="animate-spin" /> : <Database size={20} />}
+                <span>{loading ? 'Processing...' : 'Bulk Import'}</span>
+              </button>
             </div>
           )}
 
