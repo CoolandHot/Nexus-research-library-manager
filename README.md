@@ -176,8 +176,8 @@ sequenceDiagram
    
    Add these to your Cloudflare Pages project settings:
    ```
-   VITE_SUPABASE_URL=your_primary_supabase_url
-   VITE_SUPABASE_ANON_KEY=your_primary_supabase_anon_key
+   VITE_SUPABASE_GLOBAL_URL=your_primary_supabase_url
+   VITE_SUPABASE_GLOBAL_KEY=your_primary_supabase_anon_key
    ```
 
 3. **Deploy via Git**
