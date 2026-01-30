@@ -3,7 +3,7 @@ import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Plus, Settings as SettingsIcon, Database, FileText, User,
-  ChevronDown, Edit3, Trash2, Globe, Star, Tag, AlertTriangle,
+  ChevronDown, Edit3, Trash2, Globe, Star, Tag, AlertTriangle, AlertCircle, MessageSquare, Quote,
   BookOpen, Calendar, Hash, X as CloseIcon, Info, LogOut, Download, CheckSquare, Square, Share2, FolderPlus, Folder as FolderIcon, Move, Menu, PanelLeftClose, PanelLeftOpen, Link as LinkIcon, FileDown,
   ArrowUp, ArrowDown
 } from 'lucide-react';
@@ -775,7 +775,7 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                     </button>
                   </td>
                   <td
-                    className="px-10 py-6 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors z-20 shadow-sm"
+                    className="px-10 py-6 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors z-20 shadow-sm group/cell relative"
                     style={{ left: columnWidths.selection }}
                   >
                     <div className="flex flex-col space-y-1.5 overflow-hidden">
@@ -801,6 +801,17 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                         {paper.pdf_link && <span className="flex items-center space-x-1 px-1.5 py-0.5 bg-red-50 rounded text-[9px] font-bold text-red-600 uppercase"><FileText size={8} /><span>PDF Attached</span></span>}
                       </div>
                     </div>
+                    {paper.title && (
+                      <div className="absolute left-10 top-full mt-2 hidden group-hover/cell:block z-[110] w-[450px] bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 overflow-hidden">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
+                          <FileText size={12} />
+                          <span>Full Title</span>
+                        </div>
+                        <div className="text-sm font-black text-slate-800 leading-snug">
+                          {paper.title}
+                        </div>
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-6">
                     <div className="flex flex-col space-y-2 overflow-hidden">
@@ -845,9 +856,54 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-6"><div className="text-[11px] text-slate-500 line-clamp-3 leading-relaxed overflow-hidden"><MarkdownRenderer content={paper.critical_evaluation} /></div></td>
-                  <td className="px-6 py-6"><div className="text-[11px] text-slate-400 italic line-clamp-3 leading-relaxed overflow-hidden"><MarkdownRenderer content={paper.remarks} /></div></td>
-                  <td className="px-6 py-6"><div className="text-[11px] text-blue-700 font-black line-clamp-3 leading-relaxed overflow-hidden">{paper.useful_snippet ? `"${paper.useful_snippet}"` : "—"}</div></td>
+                  <td className="px-6 py-6 group/cell relative">
+                    <div className="text-[11px] text-slate-500 line-clamp-3 leading-relaxed cursor-help overflow-hidden">
+                      <MarkdownRenderer content={paper.critical_evaluation} />
+                    </div>
+                    {paper.critical_evaluation && (
+                      <div className="absolute left-0 top-full mt-2 hidden group-hover/cell:block z-[100] w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 overflow-hidden">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
+                          <AlertCircle size={12} />
+                          <span>Critical Evaluation</span>
+                        </div>
+                        <div className="text-xs text-slate-600 leading-relaxed max-h-80 overflow-y-auto custom-scrollbar pr-2">
+                          <MarkdownRenderer content={paper.critical_evaluation} />
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-6 group/cell relative">
+                    <div className="text-[11px] text-slate-400 italic line-clamp-3 leading-relaxed cursor-help overflow-hidden">
+                      <MarkdownRenderer content={paper.remarks} />
+                    </div>
+                    {paper.remarks && (
+                      <div className="absolute left-0 top-full mt-2 hidden group-hover/cell:block z-[100] w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 overflow-hidden">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
+                          <MessageSquare size={12} />
+                          <span>Remarks & Notes</span>
+                        </div>
+                        <div className="text-xs text-slate-400 italic leading-relaxed max-h-80 overflow-y-auto custom-scrollbar pr-2">
+                          <MarkdownRenderer content={paper.remarks} />
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-6 group/cell relative">
+                    <div className="text-[11px] text-blue-700 font-black line-clamp-3 leading-relaxed cursor-help overflow-hidden">
+                      {paper.useful_snippet ? `"${paper.useful_snippet}"` : "—"}
+                    </div>
+                    {paper.useful_snippet && (
+                      <div className="absolute left-0 top-full mt-2 hidden group-hover/cell:block z-[100] w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 overflow-hidden">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
+                          <Quote size={12} />
+                          <span>Useful Snippet</span>
+                        </div>
+                        <div className="text-xs text-blue-800 font-black leading-relaxed max-h-80 overflow-y-auto custom-scrollbar pr-2">
+                          "{paper.useful_snippet}"
+                        </div>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-col space-y-1">
                       {['BibTeX', 'APA', 'RIS'].map((format) => {
