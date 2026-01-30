@@ -1,0 +1,5 @@
+{
+  "name": "NexusResearch",
+  "description": "A high-performance research paper manager with recursive folder structures, Hypothesis integration, and offline-first library management.",
+  "requestFramePermissions": []
+}
