@@ -4,22 +4,20 @@ A sophisticated research paper management system built with React, TypeScript, a
 
 ## Overview
 
-Nexus Research is a powerful web application for researchers to organize, annotate, and share their academic paper collections. It uses two separate Supabase databases: one for global user authentication and another for personal library storage, giving users complete control over their research data.
+Nexus Research is a powerful web application for researchers to organize, annotate, and share their academic paper collections. It uses two separate Supabase databases: one for global user authentication (with public share links) and another for personal library storage, giving users complete control over their research data.
 
 ## Features
 
 ### 📚 Library Management
-- **Hierarchical Organization**: Create nested folders to organize papers
-- **Rich Metadata**: Store titles, authors, DOI, year, abstracts, summaries, and critical evaluations
-- **Markdown Support**: All text fields support GitHub Flavored Markdown
-- **Smart Search**: Filter papers across your entire library
-- **Bulk Operations**: Select multiple papers for batch actions
-
-### 🔗 Share Links
-- Create shareable links for paper collections
-- Public access without authentication
-- Track view counts
-- Manage and revoke links anytime
+-   **Hierarchical Organization**: Create nested folders to organize papers
+-   **Rich Metadata**: Store titles, authors, DOI, year, abstracts, summaries, and critical evaluations
+-   **Custom Markdown Support**: All text fields support markdown for rich formatting
+-   **Share Collections**: Create public share links to share selected papers without requiring login
+-   **Import from Share Links**: Import papers from shared collections into your library
+-   **Export Bibliography**: Generate annotated bibliographies in HTML format with markdown rendering
+-   **Citation Export**: Copy citations in BibTeX, APA, or RIS formats
+-   **Smart Search**: Filter papers across your entire library
+-   **Bulk Operations**: Select multiple papers for batch actions
 
 ### 📝 Annotated Bibliography
 - Generate professionally formatted HTML bibliographies
@@ -58,35 +56,36 @@ sequenceDiagram
     LibDB-->>App: Return papers
     App-->>User: Display library
     
+    Note over User,AuthDB: Share Link Operations (Public)
+    User->>App: Create share link
+    App->>LibDB: Get selected papers
+    LibDB-->>App: Return paper data
+    App->>AuthDB: Store papers as JSONB snapshot
+    AuthDB-->>App: Return share ID
+    
+    Note over User,AuthDB: Accessing Shared Papers (No Auth)
+    User->>App: Open share link (incognito)
+    App->>AuthDB: Fetch share_links by share_id
+    AuthDB-->>App: Return embedded paper data
+    App-->>User: Display shared papers
+    
     User->>App: Add/Edit paper
     App->>LibDB: Insert/Update paper
     LibDB-->>App: Confirm change
     App-->>User: Update UI
-    
-    Note over User,LibDB: Share Link Creation
-    User->>App: Create share link
-    App->>LibDB: Insert to share_links table
-    LibDB-->>App: Return share_id
-    App-->>User: Copy link to clipboard
-    
-    Note over User,LibDB: Public Share Access
-    User->>App: Access share link
-    App->>LibDB: Query papers by share_id
-    LibDB-->>App: Return shared papers
-    App-->>User: Display shared view (no auth)
 ```
 
 ### Database Schemas
 
 **Auth Database (Global)**
 - `profiles`: User accounts and library connection credentials
+- `share_links`: **Public shareable paper collections** (JSONB snapshots, no auth required)
 - Handles authentication and authorization
 - Stores references to personal library databases
 
 **Library Database (Personal)**
 - `folders`: Hierarchical folder structure
 - `papers`: Research papers with full metadata
-- `share_links`: Shareable paper collections
 - User has full control and ownership
 
 ## Setup
@@ -116,7 +115,7 @@ sequenceDiagram
 
    Run the auth schema in your primary Supabase SQL editor:
    ```sql
-   -- See lib/supabase.ts PRIMARY_SCHEMA for full schema
+   -- See the PRIMARY_SCHEMA in lib/supabase.ts for full schema
    CREATE TABLE profiles (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      username TEXT UNIQUE NOT NULL,
@@ -125,6 +124,22 @@ sequenceDiagram
      library_key TEXT,
      created_at TIMESTAMPTZ DEFAULT NOW()
    );
+   
+   -- Share links table (public access, no auth required)
+   CREATE TABLE share_links (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     share_id TEXT UNIQUE NOT NULL,
+     title TEXT NOT NULL,
+     description TEXT,
+     papers JSONB NOT NULL,
+     created_by UUID REFERENCES profiles(id),
+     created_at TIMESTAMPTZ DEFAULT NOW(),
+     expires_at TIMESTAMPTZ,
+     access_count INTEGER DEFAULT 0
+   );
+   
+   -- Enable RLS and add policies (see SETUP_REQUIRED.md)
+   ALTER TABLE share_links ENABLE ROW LEVEL SECURITY;
    ```
 
 3. **Configure Library Database**
@@ -134,7 +149,7 @@ sequenceDiagram
    -- See lib/supabase.ts LIBRARY_SCHEMA for full schema
    CREATE TABLE folders (...);
    CREATE TABLE papers (...);
-   CREATE TABLE share_links (...);
+   -- Note: share_links is in the Auth Database, not here
    ```
 
 4. **Start Development Server**
@@ -147,6 +162,52 @@ sequenceDiagram
    - Navigate to Setup page
    - Enter your personal Supabase credentials
    - Start managing your research!
+
+## Deployment
+
+### Cloudflare Pages
+
+1. **Build Configuration**
+   - Build command: `npm run build`
+   - Build output directory: `dist`
+   - Node version: 18 or higher
+
+2. **Environment Variables**
+   
+   Add these to your Cloudflare Pages project settings:
+   ```
+   VITE_SUPABASE_URL=your_primary_supabase_url
+   VITE_SUPABASE_ANON_KEY=your_primary_supabase_anon_key
+   ```
+
+3. **Deploy via Git**
+   ```bash
+   # Connect your repository to Cloudflare Pages
+   # Push to main branch to trigger automatic deployment
+   git push origin main
+   ```
+
+4. **Manual Deploy**
+   ```bash
+   # Build locally
+   npm run build
+   
+   # Deploy using Wrangler CLI
+   npx wrangler pages deploy dist
+   ```
+
+5. **Custom Domain** (Optional)
+   - Go to Cloudflare Pages dashboard
+   - Navigate to your project → Custom domains
+   - Add your domain and configure DNS
+
+### Other Platforms
+
+The app is a static Vite React application and can be deployed to:
+- **Vercel**: `vercel --prod`
+- **Netlify**: Drag & drop `dist` folder
+- **GitHub Pages**: Use `gh-pages` branch
+- **Any static hosting**: Upload `dist` folder
 
 ## Usage
 

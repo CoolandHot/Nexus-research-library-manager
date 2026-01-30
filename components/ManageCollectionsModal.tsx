@@ -1,14 +1,14 @@
-
 import React, { useState } from 'react';
-import { X, Folder, Plus, Edit3, Trash2, ChevronRight, Settings, AlertTriangle, Save } from 'lucide-react';
-import { Folder as FolderType, Paper, Profile } from '../types';
+import { X, FolderPlus, Edit3, Trash2, Hash, AlertTriangle, Folder as FolderIcon, ChevronRight, Settings, Save } from 'lucide-react';
+import { Folder, Profile, Paper } from '../types';
 import { getLibraryClient } from '../lib/supabase';
 import { useQueryClient } from '@tanstack/react-query';
+import { ConfirmDialog } from './DialogModals';
 
 interface ManageCollectionsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  folders: FolderType[];
+  folders: Folder[];
   papers: Paper[];
   profile: Profile;
 }
@@ -16,25 +16,33 @@ interface ManageCollectionsModalProps {
 const ManageCollectionsModal: React.FC<ManageCollectionsModalProps> = ({ isOpen, onClose, folders, papers, profile }) => {
   const queryClient = useQueryClient();
 
-  const [newFolderName, setNewFolderName] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newEmoji, setNewEmoji] = useState('📁');
   const [parentFolderId, setParentFolderId] = useState<string | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
+  const [editingName, setEditingName] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    folderId: string;
+    folderName: string;
+    paperCount: number;
+    childCount: number;
+  }>({ isOpen: false, folderId: '', folderName: '', paperCount: 0, childCount: 0 });
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
   const handleCreate = async () => {
     const libraryClient = getLibraryClient();
-    if (!newFolderName.trim() || !libraryClient) return;
+    if (!newName.trim() || !libraryClient) return;
     setLoading(true);
     try {
       const { error } = await libraryClient.from('folders').insert({
-        name: newFolderName.trim(),
+        name: newName.trim(),
         parent_id: parentFolderId || null
       });
       if (!error) {
-        setNewFolderName('');
+        setNewName('');
         setParentFolderId(null);
         await queryClient.invalidateQueries({ queryKey: ['library', profile.id] });
       } else {
@@ -49,10 +57,10 @@ const ManageCollectionsModal: React.FC<ManageCollectionsModalProps> = ({ isOpen,
 
   const handleRename = async (id: string) => {
     const libraryClient = getLibraryClient();
-    if (!editName.trim() || !libraryClient) return;
+    if (!editingName.trim() || !libraryClient) return;
     setLoading(true);
     try {
-      const { error } = await libraryClient.from('folders').update({ name: editName.trim() }).eq('id', id);
+      const { error } = await libraryClient.from('folders').update({ name: editingName.trim() }).eq('id', id);
       if (!error) {
         setEditingFolderId(null);
         await queryClient.invalidateQueries({ queryKey: ['library', profile.id] });
@@ -66,7 +74,7 @@ const ManageCollectionsModal: React.FC<ManageCollectionsModalProps> = ({ isOpen,
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDeleteFolder = (id: string) => {
     console.log("[Collections] Delete button triggered for folder:", id);
     const libraryClient = getLibraryClient();
     if (!libraryClient) {
@@ -74,39 +82,41 @@ const ManageCollectionsModal: React.FC<ManageCollectionsModalProps> = ({ isOpen,
       return;
     }
 
+    const folder = folders.find(f => f.id === id);
     const paperCount = papers.filter(p => p.folder_id === id).length;
     const childCount = folders.filter(f => f.parent_id === id).length;
 
-    let confirmMsg = "Permanently delete this collection?";
-    if (paperCount > 0 || childCount > 0) {
-      confirmMsg = `This folder contains ${paperCount} papers and ${childCount} child folders. Deleting it will unfile the papers and delete child folders. Proceed?`;
-    }
+    setConfirmDialog({
+      isOpen: true,
+      folderId: id,
+      folderName: folder?.name || 'this folder',
+      paperCount,
+      childCount
+    });
+  };
 
-    const confirmed = window.confirm(confirmMsg);
-    console.log("[Collections] Confirmation result for folder delete:", confirmed);
-
-    if (!confirmed) return;
+  const confirmDelete = async () => {
+    const libraryClient = getLibraryClient();
+    if (!libraryClient) return;
 
     setLoading(true);
 
-    // Execute async deletion after confirmation
-    (async () => {
-      try {
-        const { error } = await libraryClient.from('folders').delete().eq('id', id);
-        if (!error) {
-          console.log("[Collections] Folder deleted successfully");
-          await queryClient.invalidateQueries({ queryKey: ['library', profile.id] });
-        } else {
-          console.error("[Collections] Supabase folder delete error:", error);
-          alert("Failed to delete folder: " + error.message);
-        }
-      } catch (err: any) {
-        console.error("[Collections] Delete folder exception:", err);
-        alert("Error: " + err.message);
-      } finally {
-        setLoading(false);
+    try {
+      const { error } = await libraryClient.from('folders').delete().eq('id', confirmDialog.folderId);
+      if (!error) {
+        console.log("[Collections] Folder deleted successfully");
+        await queryClient.invalidateQueries({ queryKey: ['library', profile.id] });
+      } else {
+        console.error("[Collections] Supabase folder delete error:", error);
+        alert("Failed to delete folder: " + error.message);
       }
-    })();
+    } catch (err: any) {
+      console.error("[Collections] Delete folder exception:", err);
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+      setConfirmDialog({ isOpen: false, folderId: '', folderName: '', paperCount: 0, childCount: 0 });
+    }
   };
 
   return (
@@ -133,8 +143,8 @@ const ManageCollectionsModal: React.FC<ManageCollectionsModalProps> = ({ isOpen,
               <input
                 placeholder="Collection name..."
                 className="w-full bg-white border-2 border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold outline-none focus:border-blue-500 transition-all"
-                value={newFolderName}
-                onChange={e => setNewFolderName(e.target.value)}
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
               />
               <div className="flex space-x-3">
                 <select
@@ -147,7 +157,7 @@ const ManageCollectionsModal: React.FC<ManageCollectionsModalProps> = ({ isOpen,
                 </select>
                 <button
                   onClick={handleCreate}
-                  disabled={loading || !newFolderName.trim()}
+                  disabled={loading || !newName.trim()}
                   className="px-8 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-blue-100 disabled:bg-slate-300 disabled:shadow-none uppercase tracking-widest text-[10px]"
                 >
                   {loading ? "..." : "Create"}
@@ -169,8 +179,8 @@ const ManageCollectionsModal: React.FC<ManageCollectionsModalProps> = ({ isOpen,
                         <div className="flex-1 flex items-center space-x-2">
                           <input
                             className="flex-1 bg-slate-50 border-2 border-blue-200 rounded-xl px-4 py-2 text-sm font-bold"
-                            value={editName}
-                            onChange={e => setEditName(e.target.value)}
+                            value={editingName}
+                            onChange={e => setEditingName(e.target.value)}
                             autoFocus
                           />
                           <button onClick={() => handleRename(folder.id)} className="p-2 bg-emerald-500 text-white rounded-xl" title="Save"><Save size={16} /></button>
@@ -179,7 +189,7 @@ const ManageCollectionsModal: React.FC<ManageCollectionsModalProps> = ({ isOpen,
                       ) : (
                         <>
                           <div className="flex items-center space-x-3">
-                            <Folder size={18} className="text-blue-400" />
+                            <FolderIcon size={18} className="text-blue-400" />
                             <div>
                               <p className="text-sm font-black text-slate-700">{folder.name}</p>
                               {folder.parent_id && (
@@ -193,14 +203,14 @@ const ManageCollectionsModal: React.FC<ManageCollectionsModalProps> = ({ isOpen,
                           </div>
                           <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
-                              onClick={() => { setEditingFolderId(folder.id); setEditName(folder.name); }}
+                              onClick={() => { setEditingFolderId(folder.id); setEditingName(folder.name); }}
                               className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg"
                               title="Rename Collection"
                             >
                               <Edit3 size={16} />
                             </button>
                             <button
-                              onClick={() => handleDelete(folder.id)}
+                              onClick={() => handleDeleteFolder(folder.id)}
                               className="p-2 hover:bg-red-50 text-red-600 rounded-lg"
                               title="Delete Collection"
                             >
@@ -224,6 +234,21 @@ const ManageCollectionsModal: React.FC<ManageCollectionsModalProps> = ({ isOpen,
           </p>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title="Delete Folder"
+        message={
+          confirmDialog.paperCount > 0 || confirmDialog.childCount > 0
+            ? `"${confirmDialog.folderName}" contains ${confirmDialog.paperCount} papers and ${confirmDialog.childCount} child folders. Deleting it will unfile the papers and delete all child folders. This action cannot be undone.`
+            : `Are you sure you want to permanently delete "${confirmDialog.folderName}"? This action cannot be undone.`
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setConfirmDialog({ isOpen: false, folderId: '', folderName: '', paperCount: 0, childCount: 0 })}
+      />
     </div>
   );
 };

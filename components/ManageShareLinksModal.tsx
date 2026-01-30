@@ -4,6 +4,7 @@ import { X, Link as LinkIcon, Copy, Trash2, Calendar, Eye, ExternalLink, CheckCi
 import { ShareLink, Profile } from '../types';
 import { authSupabase } from '../lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ConfirmDialog } from './DialogModals';
 
 interface ManageShareLinksModalProps {
     isOpen: boolean;
@@ -14,6 +15,11 @@ interface ManageShareLinksModalProps {
 const ManageShareLinksModal: React.FC<ManageShareLinksModalProps> = ({ isOpen, onClose, profile }) => {
     const queryClient = useQueryClient();
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [confirmDialog, setConfirmDialog] = useState<{
+        isOpen: boolean;
+        linkId: string;
+        linkTitle: string;
+    }>({ isOpen: false, linkId: '', linkTitle: '' });
 
     const { data: shareLinks, isLoading } = useQuery({
         queryKey: ['share_links', profile.id],
@@ -55,10 +61,7 @@ const ManageShareLinksModal: React.FC<ManageShareLinksModalProps> = ({ isOpen, o
     };
 
     const handleDelete = (id: string, title: string) => {
-        const confirmed = window.confirm(`Are you sure you want to delete the share link "${title}"?`);
-        if (confirmed) {
-            deleteLinkMutation.mutate(id);
-        }
+        setConfirmDialog({ isOpen: true, linkId: id, linkTitle: title });
     };
 
     if (!isOpen) return null;
@@ -162,6 +165,20 @@ const ManageShareLinksModal: React.FC<ManageShareLinksModalProps> = ({ isOpen, o
                     </p>
                 </div>
             </div>
+
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title="Delete Share Link"
+                message={`Are you sure you want to delete "${confirmDialog.linkTitle}"? This will permanently remove the share link and it will no longer be accessible.`}
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
+                onConfirm={() => {
+                    deleteLinkMutation.mutate(confirmDialog.linkId);
+                    setConfirmDialog({ isOpen: false, linkId: '', linkTitle: '' });
+                }}
+                onCancel={() => setConfirmDialog({ isOpen: false, linkId: '', linkTitle: '' })}
+            />
         </div>
     );
 };

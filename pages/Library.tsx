@@ -49,8 +49,9 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
     title: string;
     message: string;
     onConfirm: () => void;
+    onCancel: () => void;
     variant?: 'danger' | 'warning' | 'info';
-  }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, onCancel: () => { }, variant: 'info' });
 
   const [alertDialog, setAlertDialog] = useState<{
     isOpen: boolean;
@@ -309,7 +310,9 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
       variant: 'danger',
       onConfirm: () => {
         bulkDeleteMutation.mutate(Array.from(selectedPaperIds));
-      }
+        setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: () => { }, onCancel: () => { }, variant: 'info' });
+      },
+      onCancel: () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: () => { }, onCancel: () => { }, variant: 'info' })
     });
   };
 
@@ -348,11 +351,13 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
         papers: papersToShare,  // Store full paper objects as JSON
         created_by: profile.id
       });
-
       if (error) throw error;
 
       const shareUrl = `${window.location.origin}/#/share/${shareId}`;
       await navigator.clipboard.writeText(shareUrl);
+
+      // Invalidate share links query to refresh the manage modal
+      queryClient.invalidateQueries({ queryKey: ['share_links', profile.id] });
 
       setAlertDialog({
         isOpen: true,
@@ -599,13 +604,6 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
             )}
           </div>
           <div className="flex items-center space-x-4">
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center space-x-2 p-2 px-4 hover:bg-slate-50 rounded-2xl border border-slate-200 transition-all text-sm font-bold text-slate-600"
-            >
-              <Share2 size={16} />
-              <span>Import CSV</span>
-            </button>
             <div className="relative">
               <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center space-x-3 p-1.5 px-4 hover:bg-slate-50 rounded-2xl border border-slate-200 transition-all">
                 <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-[10px] uppercase">{profile.username.slice(0, 2)}</div>
@@ -815,9 +813,17 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                     <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => setEditingPaper(paper)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-lg" title="Edit Entry"><Edit3 size={16} /></button>
                       <button onClick={() => {
-                        if (window.confirm("Are you absolutely sure you want to delete this research entry? This cannot be undone.")) {
-                          deletePaperMutation.mutate(paper.id);
-                        }
+                        setConfirmDialog({
+                          isOpen: true,
+                          title: 'Delete Paper',
+                          message: `Are you absolutely sure you want to delete "${paper.title}"? This action cannot be undone.`,
+                          onConfirm: () => {
+                            deletePaperMutation.mutate(paper.id);
+                            setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: () => { }, onCancel: () => { } });
+                          },
+                          onCancel: () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: () => { }, onCancel: () => { } }),
+                          variant: 'danger'
+                        });
                       }} className="p-2 hover:bg-red-100 text-red-600 rounded-lg" title="Delete Entry"><Trash2 size={16} /></button>
                     </div>
                   </td>
