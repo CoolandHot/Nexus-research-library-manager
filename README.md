@@ -6,6 +6,9 @@ A sophisticated research paper management system built with React, TypeScript, a
 
 Nexus Research is a powerful web application for researchers to organize, annotate, and share their academic paper collections. It uses two separate Supabase databases: one for global user authentication (with public share links) and another for personal library storage, giving users complete control over their research data.
 
+![Nexus Research Interface](screenshots/Nexus%20research%20screen.gif)
+
+
 ## Features
 
 ### 📚 Library Management
@@ -242,6 +245,9 @@ The app is a static Vite React application and can be deployed to:
 2. Click "Bibliography" in bulk actions
 3. HTML file downloads automatically
 4. Open in browser to view/print
+
+![Generating Annotated Bibliography](screenshots/generate-annotated-bibliography-html.png)
+![Annotated Bibliography HTML Export](screenshots/annotated-bibliograph-html.png)
 
 ## Technology Stack
 
