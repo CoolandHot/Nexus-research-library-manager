@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { X, FileText, Globe, List, Loader2, Save, Database, Plus, Star, Tag, Upload, FileSpreadsheet, Hash, Share2 } from 'lucide-react';
+import { X, FileText, Globe, List, Loader2, Save, Database, Plus, Star, Tag, Upload, FileSpreadsheet, Hash, Share2, AlertTriangle } from 'lucide-react';
 import { Folder, PaperType } from '../types';
 import { fetchCrossRefMetadata, parseBibTeX } from '../lib/metadata';
 import { authSupabase } from '../lib/supabase';
@@ -9,11 +9,12 @@ interface AddResourceModalProps {
   isOpen: boolean;
   onClose: () => void;
   folders: Folder[];
+  papers?: any[]; // Existing papers for duplicate detection
   onAdd: (papers: any[]) => Promise<void>;
   initialMode?: 'manual' | 'bibtex' | 'bulk' | 'csv' | 'share';
 }
 
-const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, folders, onAdd, initialMode = 'manual' }) => {
+const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, folders, papers = [], onAdd, initialMode = 'manual' }) => {
   const [mode, setMode] = useState<'manual' | 'bibtex' | 'bulk' | 'csv' | 'share'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
@@ -39,6 +40,10 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
   const [bibtexInput, setBibtexInput] = useState('');
   const [bulkInput, setBulkInput] = useState('');
   const [shareInput, setShareInput] = useState('');
+  const [duplicateDialog, setDuplicateDialog] = useState<{ isOpen: boolean; existingPaper: any | null }>({
+    isOpen: false,
+    existingPaper: null
+  });
 
   if (!isOpen) return null;
 
@@ -59,8 +64,21 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
     }
   };
 
-  const handleManualSubmit = async (e: React.FormEvent) => {
+  const handleManualSubmit = async (e: React.FormEvent, bypassDuplicateCheck = false) => {
     e.preventDefault();
+
+    // Check for duplicate DOI if not bypassed
+    if (!bypassDuplicateCheck && manualPaper.doi && manualPaper.doi.trim()) {
+      const existingPaper = papers.find(p => p.doi && p.doi.toLowerCase() === manualPaper.doi.toLowerCase());
+      if (existingPaper) {
+        setDuplicateDialog({
+          isOpen: true,
+          existingPaper
+        });
+        return; // Stop here and show dialog
+      }
+    }
+
     setLoading(true);
     try {
       const { userLabel, ...rest } = manualPaper;
@@ -148,6 +166,11 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
             }
           });
 
+          // Ensure url is never null/empty (database constraint)
+          if (!paper.url || !paper.url.trim()) {
+            paper.url = paper.doi ? `https://doi.org/${paper.doi}` : 'https://example.com/no-url-provided';
+          }
+
           if (paper.url && paper.url.toLowerCase().endsWith('.pdf')) paper.type = 'pdf';
           return paper;
         });
@@ -199,7 +222,8 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
         return {
           ...rest,
           folder_id: selectedFolder || null,
-          user_label: userLabel || p.user_label // Support both naming conventions
+          user_label: userLabel || p.user_label, // Support both naming conventions
+          url: p.url || (p.doi ? `https://doi.org/${p.doi}` : 'https://example.com/no-url-provided')
         };
       });
 
@@ -371,6 +395,54 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
           )}
         </div>
       </div>
+
+      {/* Duplicate Detection Dialog */}
+      {duplicateDialog.isOpen && duplicateDialog.existingPaper && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full border border-orange-200">
+            <div className="flex items-start space-x-4 mb-6">
+              <div className="p-3 bg-orange-100 rounded-2xl">
+                <AlertTriangle size={24} className="text-orange-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-black text-slate-900 mb-2">Duplicate DOI Detected</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  A paper with this DOI already exists in your library.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-4 mb-6 space-y-2">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Existing Paper</p>
+              <p className="text-sm font-bold text-slate-900">{duplicateDialog.existingPaper.title}</p>
+              <p className="text-xs text-slate-500">DOI: {duplicateDialog.existingPaper.doi}</p>
+              {duplicateDialog.existingPaper.folder_id && (
+                <p className="text-xs text-blue-600">
+                  📁 {folders.find(f => f.id === duplicateDialog.existingPaper.folder_id)?.name || 'Unknown folder'}
+                </p>
+              )}
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setDuplicateDialog({ isOpen: false, existingPaper: null })}
+                className="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-black uppercase tracking-widest text-xs transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={(e) => {
+                  setDuplicateDialog({ isOpen: false, existingPaper: null });
+                  handleManualSubmit(e as any, true);
+                }}
+                className="flex-1 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-orange-100"
+              >
+                Add Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

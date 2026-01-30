@@ -1,56 +1,33 @@
-
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NexusResearch</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: #f8fafc;
+  <link rel="stylesheet" href="/index.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "react/": "https://esm.sh/react@^19.2.4/",
+      "react": "https://esm.sh/react@^19.2.4",
+      "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+      "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
+      "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+      "@tanstack/react-query": "https://esm.sh/@tanstack/react-query@^5.90.20",
+      "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.93.3",
+      "@tanstack/react-query-persist-client": "https://esm.sh/@tanstack/react-query-persist-client@^5.90.22",
+      "@tanstack/query-sync-storage-persister": "https://esm.sh/@tanstack/query-sync-storage-persister@^5.90.22",
+      "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
     }
-    /* Zotero-like scrollbars */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
-    }
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 6px;
-    }
-  </style>
-<script type="importmap">
-{
-  "imports": {
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "@tanstack/react-query": "https://esm.sh/@tanstack/react-query@^5.90.20",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.93.3",
-    "@tanstack/react-query-persist-client": "https://esm.sh/@tanstack/react-query-persist-client@^5.90.22",
-    "@tanstack/query-sync-storage-persister": "https://esm.sh/@tanstack/query-sync-storage-persister@^5.90.22",
-    "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
   }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
+  </script>
 </head>
+
 <body>
   <div id="root"></div>
-<script type="module" src="/index.tsx"></script>
+  <script type="module" src="/index.tsx"></script>
 </body>
+
 </html>
