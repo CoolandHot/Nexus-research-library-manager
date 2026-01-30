@@ -203,13 +203,14 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
           const paper: any = { folder_id: selectedFolder || null, type: 'web' };
 
           headers.forEach((h, i) => {
-            const val = parts[i];
-            if (h === 'user_label') paper.user_label = val;
-            else if (h === 'pdf_link') paper.pdf_link = val;
-            else if (h === 'published_year') paper.published_year = val;
-            else if (h === 'importance') paper.importance = parseInt(val) || 0;
+            const val = parts[i] || '';
+            const unescapedVal = val.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
+            if (h === 'user_label') paper.user_label = unescapedVal;
+            else if (h === 'pdf_link') paper.pdf_link = unescapedVal;
+            else if (h === 'published_year') paper.published_year = unescapedVal;
+            else if (h === 'importance') paper.importance = parseInt(unescapedVal) || 0;
             else if (['title', 'authors', 'doi', 'url', 'summary', 'abstract', 'critical_evaluation', 'remarks', 'useful_snippet'].includes(h)) {
-              paper[h] = val;
+              paper[h] = unescapedVal;
             }
           });
 

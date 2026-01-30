@@ -420,7 +420,11 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
       ...papersToExport.map(p => {
         return headers.map(header => {
           const val = (p as any)[header === 'user_label' ? 'userLabel' : header] || '';
-          const escaped = ('' + val).replace(/"/g, '""');
+          // Escape quotes first as per CSV standard, then escape newlines to keep data on one line
+          const escaped = ('' + val)
+            .replace(/"/g, '""')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r');
           return `"${escaped}"`;
         }).join(',');
       })
