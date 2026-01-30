@@ -1,10 +1,30 @@
 # Nexus Research Library Manager
 
-A sophisticated research paper management system built with React, TypeScript, and Supabase, featuring a unique dual-database architecture for enhanced privacy and flexibility.
+A completely online alternative for Zotero built with React, TypeScript, and Supabase, featuring a unique dual-database architecture for enhanced privacy and flexibility.
 
 ## Overview
 
-Nexus Research is a powerful web application for researchers to organize, annotate, and share their academic paper collections. It uses two separate Supabase databases: one for global user authentication (with public share links) and another for personal library storage, giving users complete control over their research data.
+> [!IMPORTANT]
+> **Bring Your Own Database (BYODB)**: Nexus Research is designed with a decentralized data model. The built-in authentication database **only** saves your personal library database configuration (URL and API key). When you log in, the application connects directly to **your personal library database** for all data storage, display, and management. Your research data never leaves your control.
+
+```mermaid
+graph TD
+    User([User]) --> App[Nexus Research App]
+    
+    subgraph "Global Configuration"
+        App -- "1. Login" --> AuthDB[(Auth Database)]
+        AuthDB -- "2. Returns Config" --> App
+    end
+    
+    subgraph "Storage (Bring Your Own Database)"
+        App -- "3. Direct Connection" --> UserDB[(Personal Library DB)]
+        UserDB -- "4. Private Data" --> App
+    end
+    
+    style UserDB fill:#4ade80,stroke:#22c55e,stroke-width:2px,color:#fff
+```
+
+Nexus Research is a powerful web application for researchers to organize, annotate, and share their academic paper collections. It serves as a **completely online alternative for Zotero**, primarily designed to track open journal URLs and link to PDF documents stored on your personal drive (via shared file links). It uses two separate Supabase databases: one for global user authentication (with public share links) and another for personal library storage, giving users complete control over their research data.
 
 ![Nexus Research Interface](screenshots/Nexus%20research%20screen.gif)
 
