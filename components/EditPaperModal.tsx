@@ -25,8 +25,6 @@ const EditPaperModal: React.FC<EditPaperModalProps> = ({ isOpen, paper, folders,
         doi: paper.doi,
         url: paper.url,
         pdf_link: paper.pdf_link,
-        userLabel: paper.userLabel,
-        importance: paper.importance,
         summary: paper.summary,
         abstract: paper.abstract,
         critical_evaluation: paper.critical_evaluation,
@@ -116,22 +114,7 @@ const EditPaperModal: React.FC<EditPaperModalProps> = ({ isOpen, paper, folders,
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Classification</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <input 
-                    placeholder="Label (e.g. AI, Physics)" 
-                    className="bg-blue-50 border-2 border-blue-100 rounded-2xl px-5 py-3 text-sm font-black text-blue-600 uppercase"
-                    value={formData.userLabel || ''}
-                    onChange={e => handleChange('userLabel', e.target.value)}
-                  />
-                  <div className="flex items-center justify-center space-x-1 bg-slate-50 rounded-2xl border-2 border-slate-100">
-                    {[1,2,3,4,5].map(s => (
-                      <button key={s} type="button" onClick={() => handleChange('importance', s)}>
-                        <Star size={20} className={s <= (formData.importance || 0) ? "fill-amber-400 text-amber-400" : "text-slate-200"} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Collection Folder</h3>
                 <select 
                   className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 text-sm font-bold"
                   value={formData.folder_id || ''}
@@ -155,11 +138,18 @@ const EditPaperModal: React.FC<EditPaperModalProps> = ({ isOpen, paper, folders,
                   onChange={e => handleChange('abstract', e.target.value)}
                 />
                 <textarea 
-                  rows={5} 
-                  placeholder="Summary / Remarks" 
+                  rows={4} 
+                  placeholder="Summary" 
                   className="w-full bg-slate-50 border-2 border-slate-100 rounded-3xl px-6 py-4 text-sm leading-relaxed resize-none font-medium text-slate-600"
                   value={formData.summary || ''}
                   onChange={e => handleChange('summary', e.target.value)}
+                />
+                <textarea 
+                  rows={3} 
+                  placeholder="Relevance / Remarks" 
+                  className="w-full bg-slate-50 border-2 border-slate-100 rounded-3xl px-6 py-4 text-sm leading-relaxed resize-none font-medium text-slate-600"
+                  value={formData.remarks || ''}
+                  onChange={e => handleChange('remarks', e.target.value)}
                 />
               </div>
 

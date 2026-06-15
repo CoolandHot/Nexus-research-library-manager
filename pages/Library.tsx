@@ -1,33 +1,33 @@
-
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Search, Plus, Settings as SettingsIcon, Database, FileText, User,
-  ChevronDown, Edit3, Trash2, Globe, Star, Tag, AlertTriangle, AlertCircle, MessageSquare, Quote,
-  BookOpen, Calendar, Hash, X as CloseIcon, Info, LogOut, Download, CheckSquare, Square, Share2, FolderPlus, Folder as FolderIcon, Move, Menu, PanelLeftClose, PanelLeftOpen, Link as LinkIcon, FileDown,
+  Search, Plus, Settings as SettingsIcon, Database, FileText,
+  ChevronDown, Edit3, Trash2, Star, Tag, AlertTriangle, AlertCircle, MessageSquare, Quote,
+  BookOpen, Calendar, Hash, X as CloseIcon, Info, LogOut, Download, CheckSquare, Square, Folder as FolderIcon, Move, PanelLeftClose, PanelLeftOpen, FileDown,
   ArrowUp, ArrowDown
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { authSupabase, getLibraryClient } from '../lib/supabase';
-import { Folder, Paper, TreeItem, Profile } from '../types';
+import { 
+  signOut, 
+  fetchAllPapers, 
+  appendPaper, 
+  updatePaper, 
+  deletePaper, 
+  movePaper 
+} from '../lib/googleSheets';
+import { Folder, Paper, TreeItem } from '../types';
 import TreeNode from '../components/TreeNode';
 import AddResourceModal from '../components/AddResourceModal';
 import ManageCollectionsModal from '../components/ManageCollectionsModal';
 import EditPaperModal from '../components/EditPaperModal';
-import ManageShareLinksModal from '../components/ManageShareLinksModal';
 import { ConfirmDialog, AlertDialog } from '../components/DialogModals';
 import { useNavigate } from 'react-router-dom';
 import { downloadBibliography } from '../lib/bibliographyGenerator';
 import { formatBibTeX, formatAPA, formatRIS, copyCitation } from '../lib/citationFormatters';
 
-interface LibraryProps {
-  profile: Profile;
-  onLogout: () => void;
-}
-
-const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
+const Library: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -40,11 +40,15 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
   const [selectedPaperIds, setSelectedPaperIds] = useState<Set<string>>(new Set());
   const [isMoving, setIsMoving] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
-  const [isManageShareLinksOpen, setIsManageShareLinksOpen] = useState(false);
-  const [isCreatingShareLink, setIsCreatingShareLink] = useState(false);
-  const [shareLinkTitle, setShareLinkTitle] = useState('');
-  const [shareLinkDescription, setShareLinkDescription] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Paper; direction: 'asc' | 'desc' } | null>(null);
+  const [activeTooltip, setActiveTooltip] = useState<{
+    paperId: string;
+    field: string;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const hideTimeoutRef = useRef<number | null>(null);
 
   const handleSort = (key: keyof Paper) => {
     setSortConfig(prev => {
@@ -79,15 +83,14 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
   // Column Resizing State
   const [columnWidths, setColumnWidths] = useState({
     selection: 60,
-    identity: 600,
-    classification: 180,
-    abstract: 300,
-    summary: 300,
-    evaluation: 300,
-    remarks: 250,
-    snippet: 250,
-    copyAs: 180,
-    actions: 120
+    identity: 550,
+    abstract: 250,
+    summary: 250,
+    evaluation: 250,
+    remarks: 220,
+    snippet: 220,
+    copyAs: 150,
+    actions: 100
   });
 
   const resizingRef = useRef<{ col: keyof typeof columnWidths, startX: number, startWidth: number } | null>(null);
@@ -127,76 +130,120 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
     };
   }, []);
 
-  const libraryClient = getLibraryClient();
-
   const { data: libraryData, isLoading, error: queryError } = useQuery({
-    queryKey: ['library', profile.id],
-    queryFn: async () => {
-      console.log("[Library] Fetching library data...");
-      const client = getLibraryClient();
-      if (!client) throw new Error('Library client not initialized');
-      const [foldersRes, papersRes] = await Promise.all([
-        client.from('folders').select('*'),
-        client.from('papers').select('*').order('created_at', { ascending: false }),
-      ]);
-      if (foldersRes.error) {
-        console.error("[Library] Folders fetch error:", foldersRes.error);
-        throw foldersRes.error;
-      }
-      if (papersRes.error) {
-        console.error("[Library] Papers fetch error:", papersRes.error);
-        throw papersRes.error;
-      }
-
-      return {
-        folders: (foldersRes.data || []) as Folder[],
-        papers: (papersRes.data || []).map((p: any) => ({
-          ...p,
-          userLabel: p.user_label,
-          critical_evaluation: p.critical_evaluation,
-          useful_snippet: p.useful_snippet
-        })) as Paper[]
-      };
-    },
-    enabled: !!libraryClient
+    queryKey: ['library'],
+    queryFn: fetchAllPapers
   });
 
-  const updatePaperMutation = useMutation({
-    mutationFn: async (paper: Partial<Paper>) => {
-      console.log("[Library] Attempting to update paper:", paper.id);
-      const client = getLibraryClient();
-      if (!client || !paper.id) throw new Error("Library client disconnected or missing ID");
+  useEffect(() => {
+    if (!activeTooltip) return;
 
-      const { id, userLabel, critical_evaluation, useful_snippet, ...rest } = paper;
-      const dbPayload: any = {
-        title: rest.title,
-        url: rest.url,
-        pdf_link: rest.pdf_link,
-        doi: rest.doi,
-        authors: rest.authors,
-        published_year: rest.published_year,
-        summary: rest.summary,
-        abstract: rest.abstract,
-        remarks: rest.remarks,
-        importance: rest.importance,
-        folder_id: rest.folder_id,
-        user_label: userLabel,
-        critical_evaluation: critical_evaluation,
-        useful_snippet: useful_snippet
+    const tooltip = tooltipRef.current;
+    if (!tooltip) return;
+
+    const rect = tooltip.getBoundingClientRect();
+    const tooltipWidth = activeTooltip.field === 'title' ? 450 : 384;
+    const tooltipHeight = rect.height || 250;
+
+    let x = activeTooltip.clientX + 15;
+    let y = activeTooltip.clientY + 15;
+
+    if (x + tooltipWidth > window.innerWidth) {
+      x = activeTooltip.clientX - tooltipWidth - 15;
+    }
+    if (y + tooltipHeight > window.innerHeight) {
+      y = activeTooltip.clientY - tooltipHeight - 15;
+    }
+
+    tooltip.style.left = `${Math.max(10, x)}px`;
+    tooltip.style.top = `${Math.max(10, y)}px`;
+  }, [activeTooltip]);
+
+  // Clean up hide timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCellMouseEnter = (paperId: string, field: string, e: React.MouseEvent) => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+
+    const paper = libraryData?.papers.find(p => p.id === paperId);
+    if (!paper) return;
+
+    const value = (paper as any)[
+      field === 'title' ? 'title' : 
+      field === 'userLabel' ? 'userLabel' : 
+      field === 'critical_evaluation' ? 'critical_evaluation' : 
+      field === 'useful_snippet' ? 'useful_snippet' : 
+      field
+    ];
+    if (!value) return;
+
+    setActiveTooltip({ 
+      paperId, 
+      field, 
+      clientX: e.clientX, 
+      clientY: e.clientY 
+    });
+  };
+
+  const handleCellMouseLeave = () => {
+    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    hideTimeoutRef.current = window.setTimeout(() => {
+      setActiveTooltip(null);
+    }, 200);
+  };
+
+  const handleTooltipMouseEnter = () => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  };
+
+  const tooltipPaper = useMemo(() => {
+    if (!activeTooltip) return null;
+    return libraryData?.papers.find(p => p.id === activeTooltip.paperId);
+  }, [activeTooltip, libraryData]);
+
+  const updatePaperMutation = useMutation({
+    mutationFn: async (paperUpdate: Partial<Paper> & { id: string }) => {
+      console.log("[Library] Attempting to update paper:", paperUpdate.id);
+      const currentPapers = libraryData?.papers || [];
+      const originalPaper = currentPapers.find(p => p.id === paperUpdate.id);
+      if (!originalPaper) throw new Error("Paper not found in local cache");
+
+      const sheetName = originalPaper._sheetName;
+      const rowIndex = originalPaper._rowIndex;
+      if (!sheetName || rowIndex === undefined) {
+        throw new Error("Missing spreadsheet row location info");
+      }
+
+      const merged: Paper = {
+        ...originalPaper,
+        ...paperUpdate,
+        critical_evaluation: paperUpdate.critical_evaluation !== undefined ? paperUpdate.critical_evaluation : originalPaper.critical_evaluation,
+        useful_snippet: paperUpdate.useful_snippet !== undefined ? paperUpdate.useful_snippet : originalPaper.useful_snippet
       };
 
-      Object.keys(dbPayload).forEach(key => dbPayload[key] === undefined && delete dbPayload[key]);
-
-      const { data, error } = await client.from('papers').update(dbPayload).eq('id', id).select();
-
-      if (error) {
-        console.error("[Library] Paper update error:", error);
-        throw error;
+      if (paperUpdate.folder_id !== undefined && paperUpdate.folder_id !== originalPaper.folder_id) {
+        if (!paperUpdate.folder_id) {
+          throw new Error("Cannot move to empty folder in Google Sheets (each tab acts as a folder)");
+        }
+        await movePaper(sheetName, paperUpdate.folder_id, rowIndex, merged);
+      } else {
+        await updatePaper(sheetName, rowIndex, merged);
       }
-      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['library', profile.id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
       setEditingPaper(null);
     },
     onError: (err: any) => {
@@ -208,20 +255,21 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
   const deletePaperMutation = useMutation({
     mutationFn: async (id: string) => {
       console.log("[Library] Starting delete operation for ID:", id);
-      const client = getLibraryClient();
-      if (!client) throw new Error("Library disconnected");
+      const currentPapers = libraryData?.papers || [];
+      const originalPaper = currentPapers.find(p => p.id === id);
+      if (!originalPaper) throw new Error("Paper not found in local cache");
 
-      const { error } = await client.from('papers').delete().eq('id', id);
-      if (error) {
-        console.error("[Library] Supabase delete error:", error);
-        throw error;
+      const sheetName = originalPaper._sheetName;
+      const rowIndex = originalPaper._rowIndex;
+      if (!sheetName || rowIndex === undefined) {
+        throw new Error("Missing spreadsheet row location info");
       }
-      console.log("[Library] Delete successful for ID:", id);
+
+      await deletePaper(sheetName, rowIndex);
       return id;
     },
     onSuccess: (deletedId) => {
-      console.log("[Library] Invalidating cache after delete...");
-      queryClient.invalidateQueries({ queryKey: ['library', profile.id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
       setSelectedPaperIds(prev => {
         const next = new Set(prev);
         next.delete(deletedId);
@@ -237,13 +285,26 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
       console.log("[Library] Bulk deleting papers:", ids);
-      const client = getLibraryClient();
-      if (!client) throw new Error("Library disconnected");
-      const { error } = await client.from('papers').delete().in('id', ids);
-      if (error) throw error;
+      const currentPapers = libraryData?.papers || [];
+      const papersToDelete = currentPapers.filter(p => ids.includes(p.id));
+
+      const bySheet: Record<string, Paper[]> = {};
+      papersToDelete.forEach(p => {
+        if (p._sheetName && p._rowIndex !== undefined) {
+          if (!bySheet[p._sheetName]) bySheet[p._sheetName] = [];
+          bySheet[p._sheetName].push(p);
+        }
+      });
+
+      for (const sheetName of Object.keys(bySheet)) {
+        const sorted = bySheet[sheetName].sort((a, b) => (b._rowIndex || 0) - (a._rowIndex || 0));
+        for (const paper of sorted) {
+          await deletePaper(sheetName, paper._rowIndex!);
+        }
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['library', profile.id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
       setSelectedPaperIds(new Set());
     },
     onError: (err: any) => {
@@ -253,13 +314,30 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
 
   const bulkMoveMutation = useMutation({
     mutationFn: async ({ ids, folderId }: { ids: string[], folderId: string | null }) => {
-      const client = getLibraryClient();
-      if (!client) throw new Error("Library disconnected");
-      const { error } = await client.from('papers').update({ folder_id: folderId }).in('id', ids);
-      if (error) throw error;
+      if (!folderId) {
+        throw new Error("Cannot move papers to an empty folder (each sheet tab is a folder)");
+      }
+
+      const currentPapers = libraryData?.papers || [];
+      const papersToMove = currentPapers.filter(p => ids.includes(p.id));
+
+      const bySourceSheet: Record<string, Paper[]> = {};
+      papersToMove.forEach(p => {
+        if (p._sheetName && p._rowIndex !== undefined) {
+          if (!bySourceSheet[p._sheetName]) bySourceSheet[p._sheetName] = [];
+          bySourceSheet[p._sheetName].push(p);
+        }
+      });
+
+      for (const sourceSheet of Object.keys(bySourceSheet)) {
+        const sorted = bySourceSheet[sourceSheet].sort((a, b) => (b._rowIndex || 0) - (a._rowIndex || 0));
+        for (const paper of sorted) {
+          await movePaper(sourceSheet, folderId, paper._rowIndex!, paper);
+        }
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['library', profile.id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
       setSelectedPaperIds(new Set());
       setIsMoving(false);
     },
@@ -270,17 +348,11 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
 
   const tree = useMemo(() => {
     if (!libraryData) return [];
-    const buildTree = (parentId: string | null = null): TreeItem[] => {
-      return (libraryData.folders || [])
-        .filter(f => f.parent_id === parentId)
-        .map(f => ({
-          ...f,
-          children: buildTree(f.id),
-          papers: (libraryData.papers || []).filter(p => p.folder_id === f.id),
-        }));
-    };
-    const unfiledPapers: TreeItem = { id: 'unfiled', name: 'Unfiled', parent_id: null, children: [], papers: (libraryData.papers || []).filter(p => !p.folder_id) };
-    return [unfiledPapers, ...buildTree(null)];
+    return libraryData.folders.map(f => ({
+      ...f,
+      children: [],
+      papers: libraryData.papers.filter(p => p.folder_id === f.id)
+    })) as TreeItem[];
   }, [libraryData]);
 
   const activePapers = useMemo(() => {
@@ -293,8 +365,17 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
       const q = searchQuery.toLowerCase();
       papers = papers.filter(p =>
         p.title.toLowerCase().includes(q) ||
-        p.authors?.toLowerCase().includes(q) ||
-        (p.userLabel || '').toLowerCase().includes(q)
+        (p.authors || '').toLowerCase().includes(q) ||
+        (p.abstract || '').toLowerCase().includes(q) ||
+        (p.summary || '').toLowerCase().includes(q) ||
+        (p.critical_evaluation || '').toLowerCase().includes(q) ||
+        (p.remarks || '').toLowerCase().includes(q) ||
+        (p.useful_snippet || '').toLowerCase().includes(q) ||
+        (p.bibtex || '').toLowerCase().includes(q) ||
+        (p.doi || '').toLowerCase().includes(q) ||
+        (p.published_year || '').toLowerCase().includes(q) ||
+        (p.url || '').toLowerCase().includes(q) ||
+        (p.pdf_link || '').toLowerCase().includes(q)
       );
     }
 
@@ -342,7 +423,7 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
     setConfirmDialog({
       isOpen: true,
       title: 'Delete Papers',
-      message: `Are you sure you want to permanently delete these ${selectedPaperIds.size} entries? This action cannot be undone.`,
+      message: `Are you sure you want to permanently delete these ${selectedPaperIds.size} entries? This action will remove the rows from Google Sheets.`,
       variant: 'danger',
       onConfirm: () => {
         bulkDeleteMutation.mutate(Array.from(selectedPaperIds));
@@ -350,70 +431,6 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
       },
       onCancel: () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: () => { }, onCancel: () => { }, variant: 'info' })
     });
-  };
-
-  const handleCreateShareLink = async () => {
-    if (!shareLinkTitle.trim()) {
-      setAlertDialog({
-        isOpen: true,
-        title: 'Missing Title',
-        message: 'Please enter a title for the share link',
-        variant: 'error'
-      });
-      return;
-    }
-
-    try {
-      // Share links are stored in global database, not personal library
-      if (!authSupabase) {
-        setAlertDialog({
-          isOpen: true,
-          title: 'Connection Error',
-          message: 'Unable to connect to database.',
-          variant: 'error'
-        });
-        return;
-      }
-
-      const shareId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-
-      // Get full paper data for selected IDs
-      const papersToShare = activePapers.filter(p => selectedPaperIds.has(p.id));
-
-      const { error } = await authSupabase.from('share_links').insert({
-        share_id: shareId,
-        title: shareLinkTitle.trim(),
-        description: shareLinkDescription.trim() || null,
-        papers: papersToShare,  // Store full paper objects as JSON
-        created_by: profile.id
-      });
-      if (error) throw error;
-
-      const shareUrl = `${window.location.origin}/#/share/${shareId}`;
-      await navigator.clipboard.writeText(shareUrl);
-
-      // Invalidate share links query to refresh the manage modal
-      queryClient.invalidateQueries({ queryKey: ['share_links', profile.id] });
-
-      setAlertDialog({
-        isOpen: true,
-        title: 'Share Link Created',
-        message: `Share link created successfully and copied to clipboard!\n\n${shareUrl}`,
-        variant: 'success'
-      });
-
-      setIsCreatingShareLink(false);
-      setShareLinkTitle('');
-      setShareLinkDescription('');
-      setSelectedPaperIds(new Set());
-    } catch (err: any) {
-      setAlertDialog({
-        isOpen: true,
-        title: 'Error',
-        message: 'Failed to create share link: ' + err.message,
-        variant: 'error'
-      });
-    }
   };
 
   const handleGenerateBibliography = () => {
@@ -446,16 +463,14 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
 
     const headers = [
       'title', 'authors', 'published_year', 'doi', 'url', 'pdf_link',
-      'user_label', 'importance', 'summary', 'abstract',
-      'critical_evaluation', 'remarks', 'useful_snippet'
+      'summary', 'abstract', 'critical_evaluation', 'remarks', 'useful_snippet'
     ];
 
     const csvRows = [
       headers.join(','),
       ...papersToExport.map(p => {
         return headers.map(header => {
-          const val = (p as any)[header === 'user_label' ? 'userLabel' : header] || '';
-          // Escape quotes first as per CSV standard, then escape newlines to keep data on one line
+          const val = (p as any)[header] || '';
           const escaped = ('' + val)
             .replace(/"/g, '""')
             .replace(/\n/g, '\\n')
@@ -503,6 +518,11 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
     );
   };
 
+  const handleLogout = () => {
+    signOut();
+    navigate('/setup');
+  };
+
   if (isLoading) return (
     <div className="flex items-center justify-center h-screen bg-slate-50">
       <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -513,7 +533,7 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
     <div className="flex flex-col items-center justify-center h-screen bg-red-50 p-10 text-center">
       <AlertTriangle size={48} className="text-red-600 mb-4" />
       <h2 className="text-2xl font-black text-red-900 mb-2">Library Connection Failed</h2>
-      <p className="text-red-600 mb-8 max-w-md font-bold">Could not reach your personal database. Your connection keys may be invalid or the project paused.</p>
+      <p className="text-red-600 mb-8 max-w-md font-bold">Could not reach your Google Sheets database. Make sure your spreadsheet is shared correctly and you are logged in.</p>
       <button onClick={() => navigate('/setup')} className="bg-red-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-red-100">Update Credentials</button>
     </div>
   );
@@ -531,7 +551,7 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
           <button
             onClick={() => setIsManageFoldersOpen(true)}
             className="text-slate-400 hover:text-blue-600 p-2 hover:bg-blue-50 rounded-xl transition-all"
-            title="Manage Collections"
+            title="Manage Folders"
           >
             <SettingsIcon size={20} />
           </button>
@@ -552,7 +572,7 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                 key={item.id}
                 item={item}
                 level={0}
-                isActive={activeFolderId === (item.id === 'unfiled' ? null : item.id)}
+                isActive={activeFolderId === item.id}
                 onSelectFolder={setActiveFolderId}
                 onDropPaper={(pid, fid) => updatePaperMutation.mutate({ id: pid, folder_id: fid })}
               />
@@ -569,17 +589,19 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
 
       <main className="flex-1 overflow-hidden flex flex-col bg-white">
         <header className="px-10 py-6 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <button
-            onClick={() => setIsSidebarVisible(!isSidebarVisible)}
-            className="mr-4 p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600 hover:text-slate-900"
-            title={isSidebarVisible ? "Hide sidebar" : "Show sidebar"}
-          >
-            {isSidebarVisible ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-          </button>
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center">
+            <button
+              onClick={() => setIsSidebarVisible(!isSidebarVisible)}
+              className="mr-4 p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600 hover:text-slate-900"
+              title={isSidebarVisible ? "Hide sidebar" : "Show sidebar"}
+            >
+              {isSidebarVisible ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+            </button>
             <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-              {activeFolderId ? libraryData?.folders.find(f => f.id === activeFolderId)?.name : "Full Library"}
+              {activeFolderId ? activeFolderId : "Full Library"}
             </h2>
+          </div>
+          <div className="flex items-center space-x-6">
             {selectedPaperIds.size > 0 && (
               <div className="flex items-center bg-blue-50 px-4 py-2 rounded-2xl border border-blue-100 animate-in fade-in slide-in-from-left-2 space-x-4">
                 <span className="text-xs font-black text-blue-600 uppercase tracking-widest border-r border-blue-200 pr-4">{selectedPaperIds.size} Selected</span>
@@ -588,14 +610,6 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                   <button onClick={exportToCSV} className="flex items-center space-x-2 text-blue-700 hover:text-blue-900 text-[10px] font-black uppercase tracking-widest transition-colors">
                     <Download size={14} />
                     <span>Export</span>
-                  </button>
-
-                  <button
-                    onClick={() => setIsCreatingShareLink(true)}
-                    className="flex items-center space-x-2 text-green-700 hover:text-green-900 text-[10px] font-black uppercase tracking-widest transition-colors"
-                  >
-                    <LinkIcon size={14} />
-                    <span>Share</span>
                   </button>
 
                   <button
@@ -617,13 +631,6 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                     {isMoving && (
                       <div className="absolute top-full mt-3 left-0 w-64 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[100] p-3 max-h-80 overflow-y-auto custom-scrollbar">
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 px-2">Target Folder</p>
-                        <button
-                          onClick={() => bulkMoveMutation.mutate({ ids: Array.from(selectedPaperIds), folderId: null })}
-                          className="w-full text-left p-3 hover:bg-blue-50 rounded-xl text-xs font-bold flex items-center space-x-3"
-                        >
-                          <FolderIcon size={14} className="text-slate-400" />
-                          <span>Unfiled</span>
-                        </button>
                         {libraryData?.folders.map(f => (
                           <button
                             key={f.id}
@@ -648,27 +655,22 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                 </div>
               </div>
             )}
-          </div>
-          <div className="flex items-center space-x-4">
+            
             <div className="relative">
               <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center space-x-3 p-1.5 px-4 hover:bg-slate-50 rounded-2xl border border-slate-200 transition-all">
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-[10px] uppercase">{profile.username.slice(0, 2)}</div>
-                <span className="text-sm font-bold text-slate-700">{profile.username}</span>
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-[10px] uppercase">G</div>
+                <span className="text-sm font-bold text-slate-700">Google User</span>
                 <ChevronDown size={14} className={isProfileOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
               </button>
               {isProfileOpen && (
                 <div className="absolute right-0 mt-3 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-[110] p-1">
                   <button onClick={() => { navigate('/setup'); setIsProfileOpen(false); }} className="w-full text-left p-3 hover:bg-blue-50 rounded-lg text-sm font-bold flex items-center space-x-3">
                     <Database size={16} />
-                    <span>Configuration</span>
+                    <span>Settings</span>
                   </button>
-                  <button onClick={() => { setIsManageShareLinksOpen(true); setIsProfileOpen(false); }} className="w-full text-left p-3 hover:bg-green-50 rounded-lg text-sm font-bold flex items-center space-x-3 text-green-700">
-                    <LinkIcon size={16} />
-                    <span>Share Links</span>
-                  </button>
-                  <button onClick={onLogout} className="w-full text-left p-3 hover:bg-red-50 rounded-lg text-sm font-bold text-red-600 flex items-center space-x-3">
+                  <button onClick={handleLogout} className="w-full text-left p-3 hover:bg-red-50 rounded-lg text-sm font-bold text-red-600 flex items-center space-x-3">
                     <LogOut size={16} />
-                    <span>Logout</span>
+                    <span>Disconnect</span>
                   </button>
                 </div>
               )}
@@ -703,13 +705,7 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                   </div>
                   <div onMouseDown={(e) => startResizing('identity', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" onClick={(e) => e.stopPropagation()} />
                 </th>
-                <th className="px-6 py-5 relative group cursor-pointer hover:bg-slate-50 transition-colors" style={{ width: columnWidths.classification }} onClick={() => handleSort('userLabel')}>
-                  <div className="flex items-center">
-                    <span>Classification</span>
-                    <SortIndicator column="userLabel" />
-                  </div>
-                  <div onMouseDown={(e) => startResizing('classification', e)} className="absolute right-0 top-0 bottom-0 w-1 bg-transparent hover:bg-blue-400 cursor-col-resize z-50 transition-colors" onClick={(e) => e.stopPropagation()} />
-                </th>
+
                 <th className="px-6 py-5 relative group cursor-pointer hover:bg-slate-50 transition-colors" style={{ width: columnWidths.abstract }} onClick={() => handleSort('abstract')}>
                   <div className="flex items-center">
                     <span>Abstract</span>
@@ -775,8 +771,10 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                     </button>
                   </td>
                   <td
-                    className="px-10 py-6 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors z-20 shadow-sm group/cell relative"
+                    className="px-10 py-6 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors z-20 shadow-sm group/cell relative cursor-help"
                     style={{ left: columnWidths.selection }}
+                    onMouseEnter={(e) => handleCellMouseEnter(paper.id, 'title', e)}
+                    onMouseLeave={handleCellMouseLeave}
                   >
                     <div className="flex flex-col space-y-1.5 overflow-hidden">
                       <div className="text-sm font-black text-slate-800 cursor-pointer hover:text-blue-600 leading-tight truncate" onClick={() => window.open(paper.pdf_link || paper.url, '_blank')}>
@@ -801,108 +799,52 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
                         {paper.pdf_link && <span className="flex items-center space-x-1 px-1.5 py-0.5 bg-red-50 rounded text-[9px] font-bold text-red-600 uppercase"><FileText size={8} /><span>PDF Attached</span></span>}
                       </div>
                     </div>
-                    {paper.title && (
-                      <div className="absolute left-10 top-full mt-2 hidden group-hover/cell:block z-[110] w-[450px] bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 overflow-hidden">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
-                          <FileText size={12} />
-                          <span>Full Title</span>
-                        </div>
-                        <div className="text-sm font-black text-slate-800 leading-snug">
-                          {paper.title}
-                        </div>
-                      </div>
-                    )}
                   </td>
-                  <td className="px-6 py-6">
-                    <div className="flex flex-col space-y-2 overflow-hidden">
-                      <div className="flex items-center space-x-1 px-2 py-0.5 bg-blue-600 text-white rounded-md text-[9px] font-black uppercase w-fit truncate">
-                        <Tag size={10} />
-                        <span className="truncate">{paper.userLabel || "Unlabeled"}</span>
-                      </div>
-                      <div className="flex space-x-0.5">
-                        {[1, 2, 3, 4, 5].map(s => <button key={s} onClick={() => updatePaperMutation.mutate({ id: paper.id, importance: s })}><Star size={12} className={s <= (paper.importance || 0) ? "fill-amber-400 text-amber-400" : "text-slate-200"} /></button>)}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-6 group/cell relative">
-                    <div className="text-[11px] text-slate-500 line-clamp-3 leading-relaxed cursor-help overflow-hidden">
+
+                  <td 
+                    className="px-6 py-6 group/cell relative cursor-help"
+                    onMouseEnter={(e) => handleCellMouseEnter(paper.id, 'abstract', e)}
+                    onMouseLeave={handleCellMouseLeave}
+                  >
+                    <div className="text-[11px] text-slate-500 line-clamp-3 leading-relaxed overflow-hidden">
                       <MarkdownRenderer content={paper.abstract} />
                     </div>
-                    {paper.abstract && (
-                      <div className="absolute left-0 top-full mt-2 hidden group-hover/cell:block z-[100] w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 overflow-hidden">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
-                          <Info size={12} />
-                          <span>Full Abstract</span>
-                        </div>
-                        <div className="text-xs text-slate-600 leading-relaxed max-h-80 overflow-y-auto custom-scrollbar pr-2">
-                          <MarkdownRenderer content={paper.abstract} />
-                        </div>
-                      </div>
-                    )}
                   </td>
-                  <td className="px-6 py-6 group/cell relative">
-                    <div className="text-[11px] text-slate-700 font-bold line-clamp-3 leading-relaxed cursor-help overflow-hidden">
+                  <td 
+                    className="px-6 py-6 group/cell relative cursor-help"
+                    onMouseEnter={(e) => handleCellMouseEnter(paper.id, 'summary', e)}
+                    onMouseLeave={handleCellMouseLeave}
+                  >
+                    <div className="text-[11px] text-slate-700 font-bold line-clamp-3 leading-relaxed overflow-hidden">
                       <MarkdownRenderer content={paper.summary} />
                     </div>
-                    {paper.summary && (
-                      <div className="absolute left-0 top-full mt-2 hidden group-hover/cell:block z-[100] w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 overflow-hidden">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
-                          <BookOpen size={12} />
-                          <span>Detailed Summary</span>
-                        </div>
-                        <div className="text-xs text-slate-700 font-medium leading-relaxed max-h-80 overflow-y-auto custom-scrollbar pr-2">
-                          <MarkdownRenderer content={paper.summary} />
-                        </div>
-                      </div>
-                    )}
                   </td>
-                  <td className="px-6 py-6 group/cell relative">
-                    <div className="text-[11px] text-slate-500 line-clamp-3 leading-relaxed cursor-help overflow-hidden">
+                  <td 
+                    className="px-6 py-6 group/cell relative cursor-help"
+                    onMouseEnter={(e) => handleCellMouseEnter(paper.id, 'critical_evaluation', e)}
+                    onMouseLeave={handleCellMouseLeave}
+                  >
+                    <div className="text-[11px] text-slate-500 line-clamp-3 leading-relaxed overflow-hidden">
                       <MarkdownRenderer content={paper.critical_evaluation} />
                     </div>
-                    {paper.critical_evaluation && (
-                      <div className="absolute left-0 top-full mt-2 hidden group-hover/cell:block z-[100] w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 overflow-hidden">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
-                          <AlertCircle size={12} />
-                          <span>Critical Evaluation</span>
-                        </div>
-                        <div className="text-xs text-slate-600 leading-relaxed max-h-80 overflow-y-auto custom-scrollbar pr-2">
-                          <MarkdownRenderer content={paper.critical_evaluation} />
-                        </div>
-                      </div>
-                    )}
                   </td>
-                  <td className="px-6 py-6 group/cell relative">
-                    <div className="text-[11px] text-slate-400 italic line-clamp-3 leading-relaxed cursor-help overflow-hidden">
+                  <td 
+                    className="px-6 py-6 group/cell relative cursor-help"
+                    onMouseEnter={(e) => handleCellMouseEnter(paper.id, 'remarks', e)}
+                    onMouseLeave={handleCellMouseLeave}
+                  >
+                    <div className="text-[11px] text-slate-400 italic line-clamp-3 leading-relaxed overflow-hidden">
                       <MarkdownRenderer content={paper.remarks} />
                     </div>
-                    {paper.remarks && (
-                      <div className="absolute left-0 top-full mt-2 hidden group-hover/cell:block z-[100] w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 overflow-hidden">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
-                          <MessageSquare size={12} />
-                          <span>Remarks & Notes</span>
-                        </div>
-                        <div className="text-xs text-slate-400 italic leading-relaxed max-h-80 overflow-y-auto custom-scrollbar pr-2">
-                          <MarkdownRenderer content={paper.remarks} />
-                        </div>
-                      </div>
-                    )}
                   </td>
-                  <td className="px-6 py-6 group/cell relative">
-                    <div className="text-[11px] text-blue-700 font-black line-clamp-3 leading-relaxed cursor-help overflow-hidden">
+                  <td 
+                    className="px-6 py-6 group/cell relative cursor-help"
+                    onMouseEnter={(e) => handleCellMouseEnter(paper.id, 'useful_snippet', e)}
+                    onMouseLeave={handleCellMouseLeave}
+                  >
+                    <div className="text-[11px] text-blue-700 font-black line-clamp-3 leading-relaxed overflow-hidden">
                       {paper.useful_snippet ? `"${paper.useful_snippet}"` : "—"}
                     </div>
-                    {paper.useful_snippet && (
-                      <div className="absolute left-0 top-full mt-2 hidden group-hover/cell:block z-[100] w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 overflow-hidden">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
-                          <Quote size={12} />
-                          <span>Useful Snippet</span>
-                        </div>
-                        <div className="text-xs text-blue-800 font-black leading-relaxed max-h-80 overflow-y-auto custom-scrollbar pr-2">
-                          "{paper.useful_snippet}"
-                        </div>
-                      </div>
-                    )}
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-col space-y-1">
@@ -965,12 +907,33 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
         folders={libraryData?.folders || []}
         papers={libraryData?.papers || []}
         initialFolderId={activeFolderId}
-        onAdd={async (papers) => {
-          const client = getLibraryClient();
-          if (!client) return;
-          const { error } = await client.from('papers').insert(papers);
-          if (error) throw error;
-          queryClient.invalidateQueries({ queryKey: ['library', profile.id] });
+        onAdd={async (newPapers) => {
+          for (const paper of newPapers) {
+            const targetSheet = paper.folder_id || activeFolderId || libraryData?.folders[0]?.id;
+            if (!targetSheet) {
+              throw new Error("No folder tab available to add paper to.");
+            }
+            
+            const paperToInsert: Paper = {
+              id: '',
+              title: paper.title || 'Untitled',
+              url: paper.url || '',
+              pdf_link: paper.pdf_link,
+              doi: paper.doi,
+              folder_id: targetSheet,
+              type: paper.type || 'web',
+              authors: paper.authors,
+              published_year: paper.published_year,
+              summary: paper.summary,
+              abstract: paper.abstract,
+              remarks: paper.remarks,
+              useful_snippet: paper.useful_snippet,
+              bibtex: paper.bibtex || ''
+            };
+            
+            await appendPaper(targetSheet, paperToInsert);
+          }
+          queryClient.invalidateQueries({ queryKey: ['library'] });
         }}
       />
 
@@ -979,7 +942,6 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
         onClose={() => setIsManageFoldersOpen(false)}
         folders={libraryData?.folders || []}
         papers={libraryData?.papers || []}
-        profile={profile}
       />
 
       {editingPaper && (
@@ -988,68 +950,8 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
           paper={editingPaper}
           folders={libraryData?.folders || []}
           onClose={() => setEditingPaper(null)}
-          onUpdate={(updated) => updatePaperMutation.mutate(updated)}
+          onUpdate={(updated) => updatePaperMutation.mutate({ ...updated, id: editingPaper.id })}
         />
-      )}
-
-      <ManageShareLinksModal
-        isOpen={isManageShareLinksOpen}
-        onClose={() => setIsManageShareLinksOpen(false)}
-        profile={profile}
-      />
-
-      {isCreatingShareLink && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsCreatingShareLink(false)}></div>
-          <div className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl relative z-10 p-8">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="p-3 bg-green-50 text-green-600 rounded-2xl">
-                <LinkIcon size={24} />
-              </div>
-              <div>
-                <h2 className="text-2xl font-black text-slate-800">Create Share Link</h2>
-                <p className="text-xs text-slate-400">Share {selectedPaperIds.size} selected papers</p>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Title</label>
-                <input
-                  type="text"
-                  value={shareLinkTitle}
-                  onChange={(e) => setShareLinkTitle(e.target.value)}
-                  placeholder="e.g., Machine Learning Papers"
-                  className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-green-500 transition-all"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Description (Optional)</label>
-                <textarea
-                  value={shareLinkDescription}
-                  onChange={(e) => setShareLinkDescription(e.target.value)}
-                  placeholder="Brief description of this collection..."
-                  className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-green-500 transition-all resize-none"
-                  rows={3}
-                />
-              </div>
-              <div className="flex space-x-3 pt-4">
-                <button
-                  onClick={() => setIsCreatingShareLink(false)}
-                  className="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-black uppercase tracking-widest text-xs transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateShareLink}
-                  className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-green-100"
-                >
-                  Create Link
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
 
       <ConfirmDialog
@@ -1068,6 +970,94 @@ const Library: React.FC<LibraryProps> = ({ profile, onLogout }) => {
         variant={alertDialog.variant}
         onClose={() => setAlertDialog({ ...alertDialog, isOpen: false })}
       />
+
+      {activeTooltip && tooltipPaper && (
+        <div 
+          ref={tooltipRef}
+          className="fixed z-[1000] bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 pointer-events-auto"
+          onMouseEnter={handleTooltipMouseEnter}
+          onMouseLeave={handleCellMouseLeave}
+          style={{ 
+            left: '-9999px', 
+            top: '-9999px',
+            width: activeTooltip.field === 'title' ? '450px' : '384px',
+            maxHeight: '350px',
+            overflowY: 'auto'
+          }}
+        >
+          {activeTooltip.field === 'title' && (
+            <>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
+                <FileText size={12} />
+                <span>Full Title</span>
+              </div>
+              <div className="text-sm font-black text-slate-800 leading-snug">
+                {tooltipPaper.title}
+              </div>
+            </>
+          )}
+
+          {activeTooltip.field === 'abstract' && (
+            <>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
+                <Info size={12} />
+                <span>Full Abstract</span>
+              </div>
+              <div className="text-xs text-slate-600 leading-relaxed">
+                <MarkdownRenderer content={tooltipPaper.abstract} />
+              </div>
+            </>
+          )}
+
+          {activeTooltip.field === 'summary' && (
+            <>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
+                <BookOpen size={12} />
+                <span>Detailed Summary</span>
+              </div>
+              <div className="text-xs text-slate-700 font-medium leading-relaxed">
+                <MarkdownRenderer content={tooltipPaper.summary} />
+              </div>
+            </>
+          )}
+
+          {activeTooltip.field === 'critical_evaluation' && (
+            <>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
+                <AlertCircle size={12} />
+                <span>Critical Evaluation</span>
+              </div>
+              <div className="text-xs text-slate-600 leading-relaxed">
+                <MarkdownRenderer content={tooltipPaper.critical_evaluation} />
+              </div>
+            </>
+          )}
+
+          {activeTooltip.field === 'remarks' && (
+            <>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
+                <MessageSquare size={12} />
+                <span>Remarks & Notes</span>
+              </div>
+              <div className="text-xs text-slate-400 italic leading-relaxed">
+                <MarkdownRenderer content={tooltipPaper.remarks} />
+              </div>
+            </>
+          )}
+
+          {activeTooltip.field === 'useful_snippet' && (
+            <>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-50 flex items-center space-x-2">
+                <Quote size={12} />
+                <span>Useful Snippet</span>
+              </div>
+              <div className="text-xs text-blue-800 font-black leading-relaxed">
+                "{tooltipPaper.useful_snippet}"
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };

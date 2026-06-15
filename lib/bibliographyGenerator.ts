@@ -32,13 +32,11 @@ export const generateAnnotatedBibliography = (papers: Paper[], title: string = '
     const summary = paper.summary ? `<div class="section"><strong>Summary:</strong> <div class="markdown-content">${markdownToHtml(paper.summary)}</div></div>` : '';
     const evaluation = paper.critical_evaluation ? `<div class="section"><strong>Critical Evaluation:</strong> <div class="markdown-content">${markdownToHtml(paper.critical_evaluation)}</div></div>` : '';
     const remarks = paper.remarks ? `<div class="section"><strong>Remarks:</strong> <div class="markdown-content">${markdownToHtml(paper.remarks)}</div></div>` : '';
-    const label = paper.userLabel ? `<div class="label">${escapeHtml(paper.userLabel)}</div>` : '';
 
     return `
       <div class="entry">
         <div class="entry-number">[${index + 1}]</div>
         <div class="entry-content">
-          ${label}
           <div class="citation">${citation}</div>
           ${abstract}
           ${summary}

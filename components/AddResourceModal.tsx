@@ -1,9 +1,8 @@
 
 import React, { useState, useRef } from 'react';
-import { X, FileText, Globe, List, Loader2, Save, Database, Plus, Star, Tag, Upload, FileSpreadsheet, Hash, Share2, AlertTriangle } from 'lucide-react';
+import { X, FileText, Globe, List, Loader2, Save, Database, Plus, Star, Tag, Upload, FileSpreadsheet, Hash, AlertTriangle } from 'lucide-react';
 import { Folder, PaperType } from '../types';
 import { fetchCrossRefMetadata, parseBibTeX } from '../lib/metadata';
-import { authSupabase } from '../lib/supabase';
 
 interface AddResourceModalProps {
   isOpen: boolean;
@@ -11,12 +10,12 @@ interface AddResourceModalProps {
   folders: Folder[];
   papers?: any[]; // Existing papers for duplicate detection
   onAdd: (papers: any[]) => Promise<void>;
-  initialMode?: 'manual' | 'bibtex' | 'bulk' | 'csv' | 'share';
+  initialMode?: 'manual' | 'bibtex' | 'bulk' | 'csv';
   initialFolderId?: string | null;
 }
 
 const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, folders, papers = [], onAdd, initialMode = 'manual', initialFolderId = null }) => {
-  const [mode, setMode] = useState<'manual' | 'bibtex' | 'bulk' | 'csv' | 'share'>(initialMode);
+  const [mode, setMode] = useState<'manual' | 'bibtex' | 'bulk' | 'csv'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string>(initialFolderId || '');
@@ -39,15 +38,12 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
     published_year: '',
     summary: '',
     abstract: '',
-    userLabel: '',
-    importance: 0,
     critical_evaluation: '',
     remarks: '',
     useful_snippet: ''
   });
   const [bibtexInput, setBibtexInput] = useState('');
   const [bulkInput, setBulkInput] = useState('');
-  const [shareInput, setShareInput] = useState('');
   const [duplicateDialog, setDuplicateDialog] = useState<{ isOpen: boolean; existingPaper: any | null }>({
     isOpen: false,
     existingPaper: null
@@ -90,10 +86,8 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
 
     setLoading(true);
     try {
-      const { userLabel, ...rest } = manualPaper;
       await onAdd([{
-        ...rest,
-        user_label: userLabel,
+        ...manualPaper,
         folder_id: selectedFolder || null
       }]);
       onClose();
@@ -205,10 +199,8 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
           headers.forEach((h, i) => {
             const val = parts[i] || '';
             const unescapedVal = val.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
-            if (h === 'user_label') paper.user_label = unescapedVal;
-            else if (h === 'pdf_link') paper.pdf_link = unescapedVal;
+            if (h === 'pdf_link') paper.pdf_link = unescapedVal;
             else if (h === 'published_year') paper.published_year = unescapedVal;
-            else if (h === 'importance') paper.importance = parseInt(unescapedVal) || 0;
             else if (['title', 'authors', 'doi', 'url', 'summary', 'abstract', 'critical_evaluation', 'remarks', 'useful_snippet'].includes(h)) {
               paper[h] = unescapedVal;
             }
@@ -238,56 +230,7 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
     reader.readAsText(file);
   };
 
-  const handleShareLinkImport = async () => {
-    if (!shareInput.trim()) return;
-    setLoading(true);
-    try {
-      // Extract share ID from URL or use as-is
-      let shareId = shareInput.trim();
-      if (shareId.includes('/share/')) {
-        shareId = shareId.split('/share/').pop()?.split('?')[0] || shareId;
-      }
-      if (shareId.includes('#/share/')) {
-        shareId = shareId.split('#/share/').pop()?.split('?')[0] || shareId;
-      }
 
-      if (!authSupabase) throw new Error('Database not initialized');
-
-      const { data: linkData, error: linkError } = await authSupabase
-        .from('share_links')
-        .select('*')
-        .eq('share_id', shareId)
-        .single();
-
-      if (linkError || !linkData) {
-        alert('Share link not found. Please check the URL.');
-        setLoading(false);
-        return;
-      }
-
-      const papers = (linkData.papers || []).map((p: any) => {
-        const { id, userLabel, ...rest } = p; // Remove id completely
-        return {
-          ...rest,
-          folder_id: selectedFolder || null,
-          user_label: userLabel || p.user_label, // Support both naming conventions
-          url: p.url || (p.doi ? `https://doi.org/${p.doi}` : 'https://example.com/no-url-provided')
-        };
-      });
-
-      if (papers.length > 0) {
-        await onAdd(papers);
-        onClose();
-      } else {
-        alert('No papers found in this share link.');
-      }
-    } catch (err: any) {
-      console.error('Share link import failed', err);
-      alert('Failed to import from share link: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -304,9 +247,9 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
         </div>
 
         <div className="flex bg-slate-50 p-1.5 m-6 mb-0 rounded-2xl border border-slate-200 shrink-0">
-          {(['manual', 'bibtex', 'bulk', 'csv', 'share'] as const).map(m => (
+          {(['manual', 'bibtex', 'bulk', 'csv'] as const).map(m => (
             <button key={m} onClick={() => setMode(m)} className={`flex-1 flex items-center justify-center space-x-2 py-3 text-xs font-black rounded-xl transition-all uppercase tracking-widest ${mode === m ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-              {m === 'manual' ? <FileText size={16} /> : m === 'bibtex' ? <Database size={16} /> : m === 'bulk' ? <List size={16} /> : m === 'csv' ? <FileSpreadsheet size={16} /> : <Share2 size={16} />}
+              {m === 'manual' ? <FileText size={16} /> : m === 'bibtex' ? <Database size={16} /> : m === 'bulk' ? <List size={16} /> : <FileSpreadsheet size={16} />}
               <span>{m}</span>
             </button>
           ))}
@@ -343,12 +286,6 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
                     <input placeholder="PDF Direct Link" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2.5 text-sm" value={manualPaper.pdf_link} onChange={e => setManualPaper({ ...manualPaper, pdf_link: e.target.value })} />
                     <input required placeholder="Resource Title" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2.5 text-sm font-bold" value={manualPaper.title} onChange={e => setManualPaper({ ...manualPaper, title: e.target.value })} />
                     <input placeholder="Authors" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2.5 text-sm" value={manualPaper.authors} onChange={e => setManualPaper({ ...manualPaper, authors: e.target.value })} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <input placeholder="Classification Label" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2.5 text-sm font-black text-blue-600 uppercase" value={manualPaper.userLabel} onChange={e => setManualPaper({ ...manualPaper, userLabel: e.target.value })} />
-                    <div className="flex space-x-1 py-1">
-                      {[1, 2, 3, 4, 5].map(s => <button key={s} type="button" onClick={() => setManualPaper({ ...manualPaper, importance: s })}><Star size={20} className={s <= manualPaper.importance ? "fill-amber-400 text-amber-400" : "text-slate-200"} /></button>)}
-                    </div>
                   </div>
                 </div>
                 <div className="space-y-4">
@@ -442,34 +379,7 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ isOpen, onClose, fo
             </div>
           )}
 
-          {mode === 'share' && (
-            <div className="space-y-8 py-10 flex flex-col items-center justify-center border-2 border-dashed border-blue-200 rounded-[2.5rem] bg-blue-50">
-              <div className="p-6 bg-white rounded-3xl shadow-sm">
-                <Share2 size={48} className="text-blue-600" />
-              </div>
-              <div className="text-center space-y-2">
-                <h3 className="text-xl font-black text-slate-800">Import from Share Link</h3>
-                <p className="text-slate-500 text-sm max-w-md px-10">Paste a share link URL or share ID to import papers from a shared collection</p>
-              </div>
-              <div className="w-full max-w-lg space-y-4">
-                <input
-                  type="text"
-                  placeholder="Paste share link URL or share ID..."
-                  className="w-full bg-white border-2 border-blue-200 rounded-2xl px-6 py-4 text-sm font-mono text-center"
-                  value={shareInput}
-                  onChange={(e) => setShareInput(e.target.value)}
-                />
-                <button
-                  onClick={handleShareLinkImport}
-                  disabled={loading || !shareInput.trim()}
-                  className="w-full flex items-center justify-center space-x-3 px-8 py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 uppercase tracking-widest text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? <Loader2 className="animate-spin" /> : <Share2 size={20} />}
-                  <span>{loading ? 'Importing...' : 'Import Papers'}</span>
-                </button>
-              </div>
-            </div>
-          )}
+
         </div>
       </div>
 
