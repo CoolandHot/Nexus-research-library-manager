@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileSpreadsheet, Check, AlertCircle, ArrowRight, ArrowLeft, Lock, LogOut, RefreshCw } from 'lucide-react';
+import { FileSpreadsheet, Check, AlertCircle, ArrowRight, ArrowLeft, Lock, LogOut, RefreshCw, Library } from 'lucide-react';
 import { 
   signIn, 
   signOut, 
@@ -145,8 +145,17 @@ const Setup: React.FC<SetupProps> = ({ onConfigured }) => {
 
         {/* Left Side: Setup Overview */}
         <div className="space-y-8 pr-4">
+          <div className="flex items-center space-x-3.5 mb-6">
+            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-200">
+              <Library size={24} className="stroke-[2.25]" />
+            </div>
+            <div>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-none">Nexus</h2>
+              <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[9px] mt-1.5">Research Library</p>
+            </div>
+          </div>
           <div className="space-y-2">
-            <h2 className="text-4xl font-black text-slate-900 tracking-tight leading-none">Library Setup</h2>
+            <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none">Library Setup</h3>
             <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-xs">Google Sheets Integration</p>
           </div>
           

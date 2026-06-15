@@ -4,7 +4,7 @@ import {
   Search, Plus, Settings as SettingsIcon, Database, FileText,
   ChevronDown, Edit3, Trash2, Star, Tag, AlertTriangle, AlertCircle, MessageSquare, Quote,
   BookOpen, Calendar, Hash, X as CloseIcon, Info, LogOut, Download, CheckSquare, Square, Folder as FolderIcon, Move, PanelLeftClose, PanelLeftOpen, FileDown,
-  ArrowUp, ArrowDown
+  ArrowUp, ArrowDown, Library as LibraryIcon
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -544,9 +544,11 @@ const Library: React.FC = () => {
     <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900">
       <aside className={`bg-white border-r border-slate-200 flex flex-col z-20 shrink-0 transition-all duration-300 ${isSidebarVisible ? 'w-72' : 'w-0 border-r-0 overflow-hidden'}`}>
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center space-x-2 cursor-pointer group" onClick={() => setActiveFolderId(null)}>
-            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold italic shadow-lg shadow-blue-200">N</div>
-            <span className="font-extrabold text-slate-800 tracking-tight text-lg">Nexus</span>
+          <div className="flex items-center space-x-2.5 cursor-pointer group" onClick={() => setActiveFolderId(null)}>
+            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform duration-200">
+              <LibraryIcon size={18} className="stroke-[2.25]" />
+            </div>
+            <span className="font-extrabold text-slate-800 tracking-tight text-lg group-hover:text-blue-600 transition-colors">Nexus</span>
           </div>
           <button
             onClick={() => setIsManageFoldersOpen(true)}
